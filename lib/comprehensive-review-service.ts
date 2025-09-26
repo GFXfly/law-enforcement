@@ -7,6 +7,8 @@ import { DocumentContent, DocumentStructure, validateDocumentDetailed, DetailedV
 import { performAIAnalysis, AIAnalysisResult, AIAnalysisOptions } from './ai-analysis-service'
 import { getAllReviewRules, getRulesByCategory, getRulesBySeverity } from './administrative-penalty-rules'
 
+const AI_SEMANTIC_REVIEW_DISABLED = process.env.AI_SEMANTIC_REVIEW_DISABLED === 'true'
+
 export interface ComprehensiveReviewOptions {
   enableAI?: boolean
   enableSemanticCheck?: boolean
@@ -86,7 +88,7 @@ export async function performComprehensiveReview(
 
   // 默认选项
   const reviewOptions = {
-    enableAI: true,
+    enableAI: false,
     enableSemanticCheck: true,
     enableLanguageCheck: true,
     enableLogicCheck: true,
@@ -103,7 +105,9 @@ export async function performComprehensiveReview(
 
   // 2. 执行AI分析（如果启用）
   let aiAnalysis: AIAnalysisResult | undefined
-  if (reviewOptions.enableAI) {
+  const aiShouldRun = reviewOptions.enableAI && !AI_SEMANTIC_REVIEW_DISABLED
+
+  if (aiShouldRun) {
     console.log('[综合审查] 执行AI语义分析...')
     try {
       const aiOptions: AIAnalysisOptions = {
@@ -116,6 +120,8 @@ export async function performComprehensiveReview(
     } catch (error) {
       console.warn('[综合审查] AI分析失败，将跳过AI结果:', error)
     }
+  } else {
+    console.log('[综合审查] AI语义审查已暂时停用，跳过AI流程')
   }
 
   // 3. 汇总所有问题
@@ -139,7 +145,7 @@ export async function performComprehensiveReview(
   })
 
   // 添加AI分析问题（如果有）
-  if (aiAnalysis) {
+  if (aiShouldRun && aiAnalysis) {
     aiAnalysis.issues.forEach(issue => {
       // 避免重复问题（基于类别和标题的简单去重）
       const isDuplicate = allIssues.some(existingIssue =>
@@ -175,7 +181,7 @@ export async function performComprehensiveReview(
 
   // 5. 计算最终评分（综合规则验证和AI分析）
   let finalScore = validation.overallScore
-  if (aiAnalysis) {
+  if (aiShouldRun && aiAnalysis) {
     // 加权平均：规则验证70%，AI分析30%
     const aiScore = Math.min(aiAnalysis.summary.languageScore, aiAnalysis.summary.logicScore)
     finalScore = Math.round(finalScore * 0.7 + aiScore * 0.3)
@@ -204,7 +210,7 @@ export async function performComprehensiveReview(
     processingInfo: {
       processingTime,
       rulesApplied: getAllReviewRules().length,
-      aiEnabled: !!aiAnalysis,
+      aiEnabled: aiShouldRun && !!aiAnalysis,
       modelUsed: aiAnalysis?.processingDetails?.modelUsed
     },
     recommendations
@@ -273,7 +279,7 @@ function generateRecommendations(
 
   // 添加救济途径专门建议
   const hasRemedyIssues = validation.categoryResults.some(category =>
-    category.category === '救济途径' && category.issues.length > 0
+    category.category === '履行与权利告知' && category.issues.length > 0
   )
   if (hasRemedyIssues) {
     actions.push('完善救济途径告知，明确行政复议和诉讼的期限、机关信息')

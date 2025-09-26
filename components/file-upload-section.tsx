@@ -139,6 +139,8 @@ export function FileUploadSection() {
     open()
   }
 
+  const interactiveButtonClasses = "transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg focus-visible:shadow-lg"
+
   const renderUploadContent = () => {
     if (uploadedFile && uploadedFile.status === "success") {
       return (
@@ -154,7 +156,11 @@ export function FileUploadSection() {
             </div>
           </div>
           <div className="flex justify-center gap-4">
-            <Button variant="outline" onClick={removeFile}>
+            <Button
+              variant="outline"
+              onClick={removeFile}
+              className={interactiveButtonClasses}
+            >
               <X className="mr-2 h-4 w-4" />
               重新上传
             </Button>
@@ -165,6 +171,7 @@ export function FileUploadSection() {
                 processFiles()
               }}
               disabled={isProcessing}
+              className={interactiveButtonClasses}
             >
               {isProcessing ? (
                 <>
@@ -202,6 +209,7 @@ export function FileUploadSection() {
             size="default"
             variant="outline"
             onClick={handleFileSelect}
+            className={interactiveButtonClasses}
           >
             <FileText className="mr-2 h-5 w-5" />
             选择文件
@@ -222,16 +230,21 @@ export function FileUploadSection() {
 
       <Card
         className={cn(
-          "border-2 border-dashed transition-colors rounded-lg",
+          "group transform border-2 border-dashed rounded-xl bg-background/40 transition-all duration-300 ease-out will-change-transform",
           isDragActive
-            ? "border-primary bg-primary/5"
-            : "border-border hover:border-primary/50",
+            ? "border-primary bg-primary/10 shadow-lg"
+            : "border-border/80 hover:border-primary/60 hover:shadow-xl hover:-translate-y-1",
         )}
       >
 
         <div
           {...getRootProps()}
-          className={cn("relative cursor-pointer text-center p-12", isDragActive && "opacity-90")}
+          className={cn(
+            "relative cursor-pointer text-center p-12 transition-all duration-300 ease-out",
+            isDragActive
+              ? "scale-[1.02]"
+              : "group-hover:scale-[1.015] group-hover:bg-primary/5 group-hover:shadow-inner",
+          )}
         >
           <input {...getInputProps()} />
           {renderUploadContent()}

@@ -357,7 +357,7 @@ function createSummarySection(reportData: ReportData) {
     new Paragraph({
       children: [
         new TextRun({ text: "2. 中优先级：", bold: true, color: "EA580C" }),
-        new TextRun({ text: "及时修正警告问题，完善格式规范和救济途径表述" }),
+        new TextRun({ text: "及时修正警告问题，完善格式规范和权利救济表述" }),
       ],
       spacing: { after: 100 },
     }),

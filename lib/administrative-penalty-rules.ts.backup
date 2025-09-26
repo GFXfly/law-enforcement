@@ -1,0 +1,864 @@
+/**
+ * 行政处罚决定书审查标准规则
+ * 依据：《中华人民共和国行政处罚法》第四十四条
+ */
+
+import { DocumentContent, DocumentStructure } from './document-processor'
+
+export type ReviewSectionCategory =
+  | '文书格式检查'
+  | '标题部分'
+  | '文号部分'
+  | '正文部分'
+  | '落款部分'
+  | '固定内容比对'
+  | '整体一致性'
+
+export interface ReviewIssue {
+  problem: string      // 问题描述
+  location: string     // 问题位置
+  solution: string     // 修改意见
+  severity: 'critical' | 'warning' | 'info'
+}
+
+export interface PenaltyReviewRule {
+  id: string
+  name: string
+  category: ReviewSectionCategory
+  severity: 'critical' | 'warning' | 'info'
+  description: string
+  checkFunction: (content: DocumentContent, structure: DocumentStructure) => ReviewIssue[]
+}
+
+/**
+ * 第一步：文书格式检查规则
+ * 检查页边距、字体、行距等格式要求
+ */
+export const FORMAT_CHECK_RULES: PenaltyReviewRule[] = [
+  {
+    id: 'page_layout_format',
+    name: '页面布局格式',
+    category: '文书格式检查',
+    severity: 'warning',
+    description: '检查文书页边距、字体、行距是否符合规范要求',
+    checkFunction: (content, structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      // 检查文档结构完整性
+      if (!structure.title || structure.title.trim().length === 0) {
+        reviewIssues.push({
+          problem: '缺少文书标题',
+          location: '文书顶部',
+          solution: '添加完整的标题信息',
+          severity: 'critical'
+        })
+      }
+
+      // 检查内容长度合理性
+      if (text.length < 500) {
+        reviewIssues.push({
+          problem: '文书内容过短',
+          location: '整体文档',
+          solution: '检查内容完整性，补充缺失部分',
+          severity: 'warning'
+        })
+      }
+
+      // 检查基本信息结构
+      const hasReasonableStructure = text.includes('当事人') || text.includes('被处罚人')
+      if (!hasReasonableStructure) {
+        reviewIssues.push({
+          problem: '未发现当事人等基本信息',
+          location: '正文开头部分',
+          solution: '添加当事人基本信息',
+          severity: 'critical'
+        })
+      }
+
+      return reviewIssues
+    }
+  }
+]
+
+/**
+ * 第二步：标题部分检查规则
+ * 从上到下逐一比对标题格式和内容
+ */
+export const TITLE_SECTION_RULES: PenaltyReviewRule[] = [
+  {
+    id: 'document_title_format',
+    name: '文书标题格式规范',
+    category: '标题部分',
+    severity: 'critical',
+    description: '检查标题是否采用"机关名称 + 行政处罚决定书"的标准格式',
+    checkFunction: (content, structure) => {
+      const title = structure.title || ''
+      const titleLines = structure.titleLines || []
+      const reviewIssues: ReviewIssue[] = []
+
+      // 检查是否包含"行政处罚决定书"
+      if (!title.includes('行政处罚决定书')) {
+        reviewIssues.push({
+          problem: '标题未包含"行政处罚决定书"字样',
+          location: '文书标题',
+          solution: '标题必须包含"行政处罚决定书"标准表述',
+          severity: 'critical'
+        })
+      }
+
+      // 检查标题结构（应为两行格式）
+      if (titleLines.length < 2) {
+        reviewIssues.push({
+          problem: '标题格式不规范，应采用两行格式',
+          location: '文书标题区域',
+          solution: '标题分为两行：第一行为机关名称，第二行为"行政处罚决定书"',
+          severity: 'critical'
+        })
+      } else {
+        const firstLine = titleLines[0]?.trim() || ''
+        const secondLine = titleLines[1]?.trim() || ''
+
+        // 检查第一行是否为机关名称
+        const hasAuthority = /局|委员会|人民政府|管理局|监督局/.test(firstLine)
+        if (!hasAuthority) {
+          reviewIssues.push({
+            problem: '标题第一行未包含规范的机关名称',
+            location: '标题第一行',
+            solution: '应为完整的执法机关名称，如"××市××局"',
+            severity: 'warning'
+          })
+        }
+
+        // 检查第二行是否为"行政处罚决定书"
+        if (secondLine !== '行政处罚决定书') {
+          reviewIssues.push({
+            problem: '标题第二行表述不规范',
+            location: '标题第二行',
+            solution: '应严格使用"行政处罚决定书"表述',
+            severity: 'critical'
+          })
+        }
+      }
+
+      return reviewIssues
+    }
+  }
+]
+
+/**
+ * 第三步：文号部分检查规则
+ * 检查案件编号格式是否规范
+ */
+export const DOCUMENT_NUMBER_RULES: PenaltyReviewRule[] = [
+  {
+    id: 'case_number_format',
+    name: '案件编号格式规范',
+    category: '文号部分',
+    severity: 'critical',
+    description: '检查案件编号是否符合标准格式要求',
+    checkFunction: (content, structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      // 查找案件编号
+      const caseNumberPatterns = [
+        /[（(][^）)]{1,10}[）)][^〔［\[]*?[处罚决定][〔［\[\(][^〕］\]）)]*?[〕］\]\)][^号]*?号/g,
+        /[（(][^）)]{1,10}[）)][^〔［\[]*?[字][〔［\[\(][^〕］\]）)]*?[〕］\]\)][^号]*?号/g
+      ]
+
+      let foundNumbers: string[] = []
+      caseNumberPatterns.forEach(pattern => {
+        const matches = text.match(pattern) || []
+        foundNumbers = foundNumbers.concat(matches)
+      })
+
+      if (foundNumbers.length === 0) {
+        reviewIssues.push({
+          problem: '未发现符合规范的案件编号',
+          location: '标题下方文号区域',
+          solution: '案件编号应采用标准格式：（机关简称）处罚类型〔年份〕序号号',
+          severity: 'critical'
+        })
+      } else {
+        foundNumbers.forEach(number => {
+          // 检查括号格式
+          if (/\([^)]+\)/.test(number) && !/（[^）]+）/.test(number)) {
+            reviewIssues.push({
+              problem: `案件编号"${number}"中机关简称应使用中文括号（）`,
+              location: '文号区域',
+              solution: '机关简称应使用中文括号（）包围',
+              severity: 'warning'
+            })
+          }
+
+          // 检查年份方括号格式
+          if (!/〔[^〕]*?\d{4}[^〕]*?〕/.test(number)) {
+            reviewIssues.push({
+              problem: `案件编号"${number}"中年份应使用方括号〔〕`,
+              location: '文号区域',
+              solution: '年份应使用方括号〔〕包围，如：〔2024〕',
+              severity: 'warning'
+            })
+          }
+
+          // 检查处罚类型标识
+          if (!/(处罚|决定|字)/.test(number)) {
+            reviewIssues.push({
+              problem: `案件编号"${number}"缺少处罚类型标识`,
+              location: '文号区域',
+              solution: '案件编号应包含"处罚"、"决定"或"字"等类型标识',
+              severity: 'warning'
+            })
+          }
+        })
+      }
+
+      return reviewIssues
+    }
+  }
+]
+
+/**
+ * 第四步：正文部分检查规则
+ * 从当事人信息到处罚决定，逐一核查内容要素
+ */
+export const MAIN_CONTENT_RULES: PenaltyReviewRule[] = [
+  {
+    id: 'party_information_completeness',
+    name: '当事人信息完整性',
+    category: '正文部分',
+    severity: 'critical',
+    description: '检查当事人的姓名或者名称、地址等基本信息是否完整',
+    checkFunction: (content, structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      // 检查姓名或名称
+      const hasName = /当事人[：:]\s*[\u4e00-\u9fa5]{2,}|被处罚人[：:]\s*[\u4e00-\u9fa5]{2,}/.test(text) ||
+                     /名\s*称[：:]\s*[\u4e00-\u9fa5]{3,}/.test(text)
+      if (!hasName) {
+        reviewIssues.push({
+          problem: '未明确标识当事人姓名或名称',
+          location: '正文开头当事人信息部分',
+          solution: '明确列出"当事人："及其完整姓名/名称',
+          severity: 'critical'
+        })
+      }
+
+      // 检查地址信息
+      const hasAddress = /地\s*址[：:]\s*[\u4e00-\u9fa5\d]{5,}|住\s*所[：:]\s*[\u4e00-\u9fa5\d]{5,}|住\s*址[：:]\s*[\u4e00-\u9fa5\d]{5,}/.test(text) ||
+                        /经营场所[：:]\s*[\u4e00-\u9fa5\d]{5,}/.test(text)
+      if (!hasAddress) {
+        reviewIssues.push({
+          problem: '未明确标识当事人地址信息',
+          location: '当事人基本信息部分',
+          solution: '完整填写当事人住址、经营场所或通讯地址',
+          severity: 'critical'
+        })
+      }
+
+      // 检查身份证号或统一社会信用代码
+      const hasIdNumber = /身份证号[：:]\s*[0-9X]{18}|统一社会信用代码[：:]\s*[0-9A-Z]{18}|组织机构代码[：:]\s*[0-9A-Z-]{8,}/.test(text)
+      if (!hasIdNumber) {
+        reviewIssues.push({
+          problem: '未提供当事人有效身份证明',
+          location: '当事人基本信息部分',
+          solution: '提供身份证号码或统一社会信用代码等有效身份证明',
+          severity: 'critical'
+        })
+      }
+
+      return reviewIssues
+    }
+  },
+
+  {
+    id: 'violation_facts_recognition',
+    name: '违法事实认定',
+    category: '正文部分',
+    severity: 'critical',
+    description: '检查违反法律、法规、规章的事实和证据是否明确具体',
+    checkFunction: (content, structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      // 检查违法事实描述
+      const hasViolationFacts = /违法事实[：:]|违法行为[：:]|经查[，,]|调查发现[，,]/.test(text)
+      if (!hasViolationFacts) {
+        reviewIssues.push({
+          problem:'缺少违法事实认定部分')
+        suggestions.push('应设置"违法事实"专门章节，详细描述违法行为')
+      }
+
+      // 检查时间要素
+      const hasTimeElement = /\d{4}年\d{1,2}月\d{1,2}日|\d{4}-\d{1,2}-\d{1,2}|\d{4}\.\d{1,2}\.\d{1,2}/.test(text)
+      if (!hasTimeElement) {
+        reviewIssues.push({
+          problem:'违法事实缺少具体时间')
+        suggestions.push('应明确违法行为发生的具体时间')
+      }
+
+      // 检查地点要素
+      const hasLocationElement = /在.*?地|于.*?处|位于.*?的/.test(text) ||
+                                /地点[：:]\s*[\u4e00-\u9fa5\d]{3,}/.test(text)
+      if (!hasLocationElement) {
+        reviewIssues.push({
+          problem:'违法事实缺少具体地点')
+        suggestions.push('应明确违法行为发生的具体地点')
+      }
+
+      // 检查证据材料
+      const hasEvidence = /证据材料|调取|现场检查|询问笔录|检验检测|勘验检查|先行登记保存/.test(text)
+      if (!hasEvidence) {
+        reviewIssues.push({
+          problem:'未明确列举证据材料')
+        suggestions.push('应列明支撑违法事实的具体证据材料')
+      }
+
+      return reviewIssues
+    }
+  },
+
+  {
+    id: 'investigation_overview',
+    name: '调查经过与案由说明',
+    category: '正文部分',
+    severity: 'warning',
+    description: '检查是否交代案件来源、调查经过及执法人员履职情况',
+    checkFunction: (content, _structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      const hasCaseOrigin = /(经查|经调查|经核查|经核实|本局经查|本机关经查|根据举报|根据投诉|依据线索)/.test(text)
+      if (!hasCaseOrigin) {
+        reviewIssues.push({
+          problem:'未说明案件来源或调查起因（如举报、日常检查等）')
+        suggestions.push('正文开头应写明案件来源，例如“经查”“根据举报线索”等表述')
+      }
+
+      const hasInvestigatorInfo = /(执法人员|调查人员|检查人员|执法证号|执法证第).{0,20}(号|证)/.test(text) ||
+                                 /(由.*?(局|队).*?执法人员.*?进行|责成.*?执法人员)/.test(text)
+      if (!hasInvestigatorInfo) {
+        reviewIssues.push({
+          problem:'未体现执法人员或调查力量履职信息')
+        suggestions.push('应说明参与调查的执法人员姓名或执法证号，保证程序合法性')
+      }
+
+      return reviewIssues
+    }
+  },
+
+  {
+    id: 'evidence_enumeration',
+    name: '证据材料列明情况',
+    category: '正文部分',
+    severity: 'warning',
+    description: '检查证据是否逐项列举且能够支撑违法事实',
+    checkFunction: (content, _structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      const evidenceMatches = text.match(/证据[一二三四五六七八九十0-9]/g) || []
+      const evidenceKeywords = text.match(/询问笔录|现场检查笔录|抽样检测报告|鉴定意见|票据|照片|凭证|笔录|证人证言|先行登记保存/g) || []
+
+      if (evidenceMatches.length === 0 && (!evidenceKeywords || evidenceKeywords.length < 2)) {
+        reviewIssues.push({
+          problem:'证据材料未逐项列明或数量不足以支撑事实认定')
+        suggestions.push('建议以“证据一、…证据二、…”等形式列出主要证据，确保证据链完整')
+      }
+
+      if (!/证据/.test(text)) {
+        reviewIssues.push({
+          problem:'正文未出现“证据”表述，缺少证据支撑说明')
+        suggestions.push('应在违法事实部分增加证据说明，写明证据名称及证明目的')
+      }
+
+      return reviewIssues
+    }
+  },
+
+  {
+    id: 'legal_basis_completeness',
+    name: '法律依据完整性',
+    category: '正文部分',
+    severity: 'critical',
+    description: '检查行政处罚的种类和依据是否明确、准确、完整',
+    checkFunction: (content, structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      // 检查违法依据
+      const hasViolationBasis = /违反.*?法.*?条|违反.*?规定|违反.*?办法.*?条/.test(text)
+      if (!hasViolationBasis) {
+        reviewIssues.push({
+          problem:'未明确违反的具体法律条款')
+        suggestions.push('应明确引用被违反的法律法规具体条款')
+      }
+
+      // 检查处罚依据
+      const hasPenaltyBasis = /依据.*?法.*?条|根据.*?规定|按照.*?法.*?条/.test(text)
+      if (!hasPenaltyBasis) {
+        reviewIssues.push({
+          problem:'未明确处罚的法律依据')
+        suggestions.push('应明确引用作出处罚决定的法律条款依据')
+      }
+
+      // 检查法条引用格式
+      const legalReferences = text.match(/《[\u4e00-\u9fa5]{3,}》第\d+条|《[\u4e00-\u9fa5]{3,}》第\d+款|《[\u4e00-\u9fa5]{3,}》第\d+项/g)
+      if (!legalReferences || legalReferences.length === 0) {
+        reviewIssues.push({
+          problem:'法条引用格式不规范')
+        suggestions.push('法条引用应使用标准格式：《法律名称》第X条第X款第X项')
+      }
+
+      // 检查自由裁量权说明
+      const hasDiscretionExplanation = /情节|综合考虑|酌情|从轻|从重/.test(text)
+      if (!hasDiscretionExplanation && /罚款\d+元|处.*?罚款/.test(text)) {
+        reviewIssues.push({
+          problem:'未说明自由裁量权行使依据')
+        suggestions.push('涉及自由裁量的应说明综合考虑因素和裁量理由')
+      }
+
+      return reviewIssues
+    }
+  },
+
+  {
+    id: 'penalty_decision_content',
+    name: '处罚决定内容',
+    category: '正文部分',
+    severity: 'critical',
+    description: '检查行政处罚的履行方式和期限是否明确',
+    checkFunction: (content, structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      // 检查处罚决定表述
+      const hasPenaltyDecision = /决定给予.*?处罚|决定对.*?进行.*?处罚|现决定|特决定/.test(text)
+      if (!hasPenaltyDecision) {
+        reviewIssues.push({
+          problem:'缺少明确的处罚决定表述')
+        suggestions.push('应使用"决定给予...处罚"等明确的决定性表述')
+      }
+
+      // 检查处罚种类
+      const penaltyTypes = ['警告', '罚款', '没收', '责令停产停业', '暂扣', '吊销', '行政拘留']
+      const foundPenaltyTypes = penaltyTypes.filter(type => text.includes(type))
+      if (foundPenaltyTypes.length === 0) {
+        reviewIssues.push({
+          problem:'未明确处罚种类')
+        suggestions.push('应明确具体的处罚种类（警告、罚款、没收等）')
+      }
+
+      // 检查履行期限（如果涉及罚款或其他需要履行的处罚）
+      if (text.includes('罚款') || text.includes('没收') || text.includes('责令')) {
+        const hasDeadline = /\d+日内|收到.*?决定书.*?\d+日内|自.*?之日起\d+日内/.test(text)
+        if (!hasDeadline) {
+          reviewIssues.push({
+          problem:'未明确处罚履行期限')
+          suggestions.push('应明确履行期限，通常为"收到决定书之日起十五日内"')
+        }
+      }
+
+      // 检查履行方式
+      if (text.includes('罚款')) {
+        const hasPaymentMethod = /缴纳|银行|账户|缴款书|代收银行/.test(text)
+        if (!hasPaymentMethod) {
+          reviewIssues.push({
+          problem:'未说明罚款缴纳方式')
+          suggestions.push('应说明罚款具体缴纳方式和银行账户信息')
+        }
+      }
+
+      return reviewIssues
+    }
+  },
+
+  {
+    id: 'penalty_reasoning_detail',
+    name: '处罚裁量理由充分性',
+    category: '正文部分',
+    severity: 'warning',
+    description: '检查处罚裁量是否说明情节、危害后果及从轻从重理由',
+    checkFunction: (content, _structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      const hasCircumstances = /(情节|危害|后果|违法所得|整改|主动|配合|从轻|从重|减轻)/.test(text)
+      const hasDiscretionWords = /(综合考虑|根据.*?裁量|拟给予|参照.*?裁量基准|依照.*?裁量)/.test(text)
+
+      if (!hasCircumstances || !hasDiscretionWords) {
+        reviewIssues.push({
+          problem:'处罚理由未充分说明裁量因素（违法情节、后果或裁量基准）')
+        suggestions.push('应当结合裁量基准写明违法情节、危害后果以及从轻从重处理理由')
+      }
+
+      return reviewIssues
+    }
+  },
+
+  {
+    id: 'rights_notification',
+    name: '权利告知',
+    category: '正文部分',
+    severity: 'critical',
+    description: '检查是否告知当事人享有的申请听证、陈述申辩等权利',
+    checkFunction: (content, structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      // 检查陈述申辩权告知
+      const hasStatementRight = /陈述|申辩|事先告知|拟处罚告知书/.test(text)
+      if (!hasStatementRight) {
+        reviewIssues.push({
+          problem:'未告知当事人陈述申辩权利')
+        suggestions.push('应告知当事人有陈述申辩的权利')
+      }
+
+      // 检查听证权告知（重大处罚）
+      const hasLargePenalty = /罚款.*?[5-9]\d{4,}|罚款.*?[1-9]\d{5,}/.test(text) ||
+                             /没收.*?违法所得|责令停产停业|吊销|暂扣/.test(text)
+      if (hasLargePenalty) {
+        const hasHearingNotice = /听证|要求举行听证/.test(text)
+        if (!hasHearingNotice) {
+          reviewIssues.push({
+          problem:'重大处罚案件未告知听证权利')
+          suggestions.push('对较大数额罚款等重大处罚应告知当事人听证权利')
+        }
+      }
+
+      return reviewIssues
+    }
+  }
+]
+
+/**
+ * 第五步：落款部分检查规则
+ * 检查执法机关信息和决定日期
+ */
+export const SIGNATURE_SECTION_RULES: PenaltyReviewRule[] = [
+  {
+    id: 'authority_signature_format',
+    name: '执法机关落款格式',
+    category: '落款部分',
+    severity: 'critical',
+    description: '检查执法机关名称、盖章位置和决定日期是否规范',
+    checkFunction: (content, structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      // 检查机关名称
+      const hasAuthorityName = /执法机关|处罚机关|\S+局|\S+委员会|\S+人民政府/.test(text) ||
+                              /（盖章）|（公章）|（印）/.test(text)
+      if (!hasAuthorityName) {
+        reviewIssues.push({
+          problem:'未明确执法机关名称')
+        suggestions.push('应明确标注作出决定的行政机关全称')
+      }
+
+      // 检查决定日期
+      const hasDecisionDate = /\d{4}年\d{1,2}月\d{1,2}日$/.test(text) ||
+                             text.match(/\d{4}年\d{1,2}月\d{1,2}日\s*$/)
+      if (!hasDecisionDate) {
+        reviewIssues.push({
+          problem:'未明确决定作出日期')
+        suggestions.push('应在文书末尾标注作出决定的具体日期')
+      }
+
+      // 检查盖章位置标识
+      const hasSealMark = /（盖章）|（公章）|（印章）/.test(text)
+      if (!hasSealMark) {
+        reviewIssues.push({
+          problem:'未标识盖章位置')
+        suggestions.push('应在机关名称下方标注"（盖章）"')
+      }
+
+      return reviewIssues
+    }
+  }
+]
+
+/**
+ * 第六步：固定内容比对规则（第九和第十部分）
+ * 按照固定内容进行比对审查
+ */
+export const FIXED_CONTENT_RULES: PenaltyReviewRule[] = [
+  {
+    id: 'administrative_remedy_notice',
+    name: '行政救济权利告知（第九部分）',
+    category: '固定内容比对',
+    severity: 'critical',
+    description: '检查行政复议和行政诉讼权利告知的固定内容是否规范完整',
+    checkFunction: (content, structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      // 检查复议权利告知固定内容
+      const reconsiderationContent = [
+        '如不服本决定',
+        '可以在收到本决定书之日起六十日内',
+        '向',
+        '申请行政复议'
+      ]
+
+      const hasCompleteReconsideration = reconsiderationContent.every(phrase =>
+        text.includes(phrase) || text.includes(phrase.replace(/\s+/g, ''))
+      )
+
+      if (!hasCompleteReconsideration) {
+        reviewIssues.push({
+          problem:'行政复议权利告知内容不完整或表述不规范')
+        suggestions.push('应包含完整的复议权利告知：\"如不服本决定，可以在收到本决定书之日起六十日内向[复议机关]申请行政复议\"')
+      }
+
+      // 检查诉讼权利告知固定内容
+      const litigationContent = [
+        '也可以在收到本决定书之日起六个月内',
+        '直接向人民法院提起行政诉讼'
+      ]
+
+      const hasCompleteLitigation = litigationContent.every(phrase =>
+        text.includes(phrase) || text.includes(phrase.replace(/\s+/g, ''))
+      )
+
+      if (!hasCompleteLitigation) {
+        reviewIssues.push({
+          problem:'行政诉讼权利告知内容不完整或表述不规范')
+        suggestions.push('应包含完整的诉讼权利告知：\"也可以在收到本决定书之日起六个月内直接向人民法院提起行政诉讼\"')
+      }
+
+      return reviewIssues
+    }
+  },
+
+  {
+    id: 'enforcement_consequence_notice',
+    name: '逾期履行后果告知（第十部分）',
+    category: '固定内容比对',
+    severity: 'warning',
+    description: '检查逾期不履行处罚决定的法律后果告知固定内容',
+    checkFunction: (content, structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      // 针对罚款类处罚的固定内容检查
+      if (text.includes('罚款')) {
+        const fineEnforcementContent = [
+          '逾期不缴纳罚款的',
+          '每日按罚款数额的百分之三加处罚款',
+          '并可申请人民法院强制执行'
+        ]
+
+        const hasCompleteFineEnforcement = fineEnforcementContent.some(phrase =>
+          text.includes(phrase) || text.includes(phrase.replace(/\s+/g, ''))
+        )
+
+        if (!hasCompleteFineEnforcement) {
+          reviewIssues.push({
+          problem:'罚款类处罚的逾期履行后果告知不规范')
+          suggestions.push('应明确告知：\"逾期不缴纳罚款的，每日按罚款数额的百分之三加处罚款，并可申请人民法院强制执行\"')
+        }
+      }
+
+      // 针对其他处罚类型的固定内容检查
+      const otherEnforcementTypes = ['没收', '责令停产停业', '暂扣', '吊销']
+      const hasOtherPenalties = otherEnforcementTypes.some(type => text.includes(type))
+
+      if (hasOtherPenalties) {
+        const hasEnforcementNotice = /申请人民法院强制执行|移送人民法院强制执行/.test(text)
+        if (!hasEnforcementNotice) {
+          reviewIssues.push({
+          problem:'非罚款类处罚缺少强制执行告知')
+          suggestions.push('应告知逾期不履行的，依法申请人民法院强制执行')
+        }
+      }
+
+      return reviewIssues
+    }
+  }
+]
+
+/**
+ * 第七步：整体一致性检查规则
+ * 检查文书内容的逻辑一致性和语言规范性
+ */
+export const CONSISTENCY_RULES: PenaltyReviewRule[] = [
+  {
+    id: 'fact_law_consistency',
+    name: '事实认定与法律适用一致性',
+    category: '整体一致性',
+    severity: 'critical',
+    description: '检查违法事实认定与引用法条是否一致匹配',
+    checkFunction: (content, structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      // 检查违法事实与法律条款的对应关系
+      const factPatterns = [
+        { fact: /销售.*?过期.*?食品|过期.*?食品.*?销售/i, law: /食品安全法/, category: '食品安全' },
+        { fact: /无证.*?经营|未取得.*?许可/i, law: /行政许可法|许可证/i, category: '无证经营' },
+        { fact: /虚假.*?宣传|误导.*?消费者/i, law: /广告法|消费者权益保护法/i, category: '虚假宣传' },
+        { fact: /价格.*?欺诈|哄抬.*?价格/i, law: /价格法/i, category: '价格违法' }
+      ]
+
+      factPatterns.forEach(pattern => {
+        const hasFact = pattern.fact.test(text)
+        const hasMatchingLaw = pattern.law.test(text)
+
+        if (hasFact && !hasMatchingLaw) {
+          reviewIssues.push({
+          problem:`发现${pattern.category}相关违法事实，但未引用对应的法律条款`)
+          suggestions.push(`涉及${pattern.category}的案件应引用相关法律法规作为处罚依据`)
+        }
+      })
+
+      return reviewIssues
+    }
+  },
+
+  {
+    id: 'content_consistency',
+    name: '内容前后一致性',
+    category: '整体一致性',
+    severity: 'warning',
+    description: '检查文书内容前后表述的一致性',
+    checkFunction: (content, structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      // 检查当事人姓名/名称一致性
+      const partyNameMatches = text.match(/当事人[：:]\s*([^\s，。\n]{2,20})/g) || []
+      const partyNames = partyNameMatches.map(match => {
+        const nameMatch = match.match(/当事人[：:]\s*([^\s，。\n]{2,20})/)
+        return nameMatch ? nameMatch[1] : null
+      }).filter(Boolean)
+
+      if (partyNames.length > 1) {
+        const uniqueNames = [...new Set(partyNames)]
+        if (uniqueNames.length > 1) {
+          reviewIssues.push({
+          problem:`当事人姓名/名称表述不一致：${uniqueNames.join('、')}`)
+          suggestions.push('确保文书中当事人姓名/名称表述前后一致')
+        }
+      }
+
+      // 检查处罚金额一致性
+      const penaltyAmounts = text.match(/罚款.*?(\d+(?:,\d+)*).*?元|(\d+(?:,\d+)*).*?元.*?罚款/gi) || []
+      const amounts = penaltyAmounts.map(match => {
+        const numMatch = match.match(/(\d+(?:,\d+)*)/);
+        return numMatch ? numMatch[1] : null;
+      }).filter(Boolean)
+
+      if (amounts.length > 1) {
+        const uniqueAmounts = [...new Set(amounts)]
+        if (uniqueAmounts.length > 1) {
+          reviewIssues.push({
+          problem:`处罚金额表述不一致：${uniqueAmounts.join('、')}元`)
+          suggestions.push('确保文书中处罚金额表述前后一致，避免出现不同的金额')
+        }
+      }
+
+      return reviewIssues
+    }
+  },
+
+  {
+    id: 'language_formality',
+    name: '语言表述规范性',
+    category: '整体一致性',
+    severity: 'warning',
+    description: '检查是否使用规范的法律用语，避免口语化表述',
+    checkFunction: (content, structure) => {
+      const text = content.text
+      const reviewIssues: ReviewIssue[] = []
+
+      // 检查非正式用词
+      const informalWords = [
+        '很', '非常', '比较', '应该', '可能', '大概', '差不多', '挺', '特别',
+        '估计', '大约', '左右', '几乎', '基本上', '一般来说', '通常', '往往'
+      ]
+
+      const foundInformal = informalWords.filter(word => text.includes(word))
+      if (foundInformal.length > 0) {
+        reviewIssues.push({
+          problem:`使用了非正式用词：${foundInformal.join('、')}`)
+        suggestions.push('应使用规范的法律用语，避免口语化表述')
+      }
+
+      return reviewIssues
+    }
+  }
+]
+
+/**
+ * 按照新的结构化审查流程重新组织的所有规则
+ * 1. 文书格式检查 -> 2. 标题部分 -> 3. 文号部分 -> 4. 正文部分 -> 5. 落款部分 -> 6. 固定内容比对 -> 7. 整体一致性
+ */
+
+
+/**
+ * 获取所有审查规则 - 按照结构化审查流程顺序排列
+ */
+export function getAllReviewRules(): PenaltyReviewRule[] {
+  return [
+    ...FORMAT_CHECK_RULES,              // 1. 文书格式检查
+    ...TITLE_SECTION_RULES,             // 2. 标题部分
+    ...DOCUMENT_NUMBER_RULES,           // 3. 文号部分
+    ...MAIN_CONTENT_RULES,              // 4. 正文部分
+    ...SIGNATURE_SECTION_RULES,         // 5. 落款部分
+    ...FIXED_CONTENT_RULES,             // 6. 固定内容比对（第九和第十部分）
+    ...CONSISTENCY_RULES                // 7. 整体一致性
+  ]
+}
+
+/**
+ * 获取结构化审查流程规则集合
+ */
+export function getStructuredReviewRules() {
+  return {
+    formatCheck: FORMAT_CHECK_RULES,
+    titleSection: TITLE_SECTION_RULES,
+    documentNumber: DOCUMENT_NUMBER_RULES,
+    mainContent: MAIN_CONTENT_RULES,
+    signatureSection: SIGNATURE_SECTION_RULES,
+    fixedContent: FIXED_CONTENT_RULES,
+    consistency: CONSISTENCY_RULES
+  }
+}
+
+/**
+ * 按类别获取审查规则
+ */
+export function getRulesByCategory(category: ReviewSectionCategory): PenaltyReviewRule[] {
+  return getAllReviewRules().filter(rule => rule.category === category)
+}
+
+/**
+ * 按严重程度获取审查规则
+ */
+export function getRulesBySeverity(severity: 'critical' | 'warning' | 'info'): PenaltyReviewRule[] {
+  return getAllReviewRules().filter(rule => rule.severity === severity)
+}
+
+/**
+ * 获取简化的审查结果输出函数
+ */
+export function formatReviewResults(issues: ReviewIssue[]): string {
+  if (issues.length === 0) {
+    return '审查通过，未发现问题。'
+  }
+
+  let result = `发现 ${issues.length} 个问题：\n\n`
+
+  issues.forEach((issue, index) => {
+    const severityLabel = issue.severity === 'critical' ? '【严重】' :
+                         issue.severity === 'warning' ? '【警告】' : '【提示】'
+
+    result += `${index + 1}. ${severityLabel} ${issue.problem}\n`
+    result += `   位置：${issue.location}\n`
+    result += `   修改：${issue.solution}\n\n`
+  })
+
+  return result.trim()
+}

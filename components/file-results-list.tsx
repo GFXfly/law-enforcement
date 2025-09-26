@@ -15,6 +15,21 @@ interface Issue {
   suggestion: string
 }
 
+interface RuleSummary {
+  id: string
+  summary: string
+  category?: string
+  status: "符合" | "存在问题"
+  details?: string
+  suggestions?: string[]
+}
+
+interface FileProcessingDetails {
+  ruleSummaries?: RuleSummary[]
+  modelUsed?: string
+  aiAnalyzed?: boolean
+}
+
 interface FileResult {
   id: string
   name: string
@@ -22,6 +37,7 @@ interface FileResult {
   status: "completed" | "warning" | "error"
   score: number
   issues: Issue[]
+  processingDetails?: FileProcessingDetails
 }
 
 interface FileResultsListProps {
@@ -88,6 +104,8 @@ export function FileResultsList({ files }: FileResultsListProps) {
           ["info", groupedIssues.info],
         ] as const
 
+        const aiModel = file.processingDetails?.modelUsed
+
         return (
           <Card key={file.id} className="overflow-hidden">
             <CardHeader className="bg-muted/40">
@@ -112,6 +130,11 @@ export function FileResultsList({ files }: FileResultsListProps) {
                   <Badge variant={getStatusColor(file.status)} className="text-xs px-3 py-1">
                     {getStatusText(file.status)}
                   </Badge>
+                  {aiModel && (
+                    <Badge variant="outline" className="text-xs px-3 py-1">
+                      AI: {aiModel}
+                    </Badge>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -183,6 +206,7 @@ export function FileResultsList({ files }: FileResultsListProps) {
                   <p className="text-sm text-muted-foreground">未发现问题，该文书符合规范要求</p>
                 </div>
               )}
+
             </CardContent>
           </Card>
         )

@@ -1,5 +1,5 @@
 import { DocumentContent, DocumentStructure } from './document-processor'
-import { getAllReviewRules, getRulesByCategory } from './administrative-penalty-rules'
+import { getAllReviewRules } from './administrative-penalty-rules'
 
 export interface AIAnalysisOptions {
   enableSemanticCheck?: boolean
@@ -38,11 +38,6 @@ export interface AIAnalysisResult {
  * 构建执法文书AI分析的专业提示词（基于专业审查规则）
  */
 function buildAnalysisPrompt(content: DocumentContent, structure: DocumentStructure, options: AIAnalysisOptions): string {
-  const allRules = getAllReviewRules()
-  const mandatoryRules = getRulesByCategory('必备要素')
-  const proceduralRules = getRulesByCategory('程序规范').concat(getRulesByCategory('救济途径'))
-  const formatRules = getRulesByCategory('格式要求')
-  const languageRules = getRulesByCategory('语言规范')
 
   const basePrompt = `你是一位资深的行政执法文书审查专家，同时也是语言文字及逻辑推理的顶级校对顾问。请在深刻理解文书整体含义的前提下，综合法律审查与高阶语义校验能力，对以下行政处罚决定书进行逐条核查。必须严格依据《中华人民共和国行政处罚法》第四十四条及《行政处罚决定书审查标准》，逐项列出发现的问题。
 
@@ -57,74 +52,51 @@ ${content.text}
 
 ## 专业审查标准
 
-### 一、必备要素完整性审查（依据行政处罚法第44条）
-请重点检查以下法定必备要素：
+### 一、首部信息规范性审查
+- 标题是否采用“机关名称 + 行政处罚决定书”的两行结构
+- 文书标题是否准确呈现“行政处罚决定书”
+- 文号格式是否完整，包含机关简称、年份和序号
 
-1. **当事人信息**：
-   - 当事人的姓名或者名称是否完整准确
-   - 地址信息是否详细完整
-   - 身份证明（身份证号/统一社会信用代码）是否提供
+### 二、当事人信息完整性审查
+- 当事人姓名或名称是否完整准确
+- 地址、联系电话、身份证号或社会信用代码是否齐备
+- 法定代表人或负责人信息是否注明（如适用）
 
-2. **违法事实认定**：
-   - 违反法律、法规、规章的事实是否清晰具体
-   - 是否明确违法行为的时间、地点、方式
-   - 证据材料是否充分，证据链是否完整
+### 三、违法事实与证据核查
+- 违法事实描述是否具体清晰，包含时间、地点、方式
+- 证据材料是否逐项列明，可支撑事实认定
+- 是否存在事实遗漏、表述含糊或证据链断裂的情况
 
-3. **法律依据引用**：
-   - 违法依据引用是否准确完整
-   - 处罚依据是否明确具体
-   - 法条引用格式是否规范
-   - 自由裁量权行使是否有充分说明
+### 四、处罚依据与决定内容核查
+- 违法依据、处罚依据的引用是否准确、格式是否规范
+- 行政处罚种类、幅度、履行方式和期限是否明确
+- 自由裁量理由是否充分，处罚幅度是否与事实匹配
 
-4. **处罚决定内容**：
-   - 处罚种类是否明确
-   - 履行方式和期限是否具体
-   - 缴纳方式是否详细说明
+### 五、履行要求与权利告知核查
+- 是否明确罚款缴纳方式、账户、期限等执行要求
+- 是否依法告知行政复议、行政诉讼途径及法定期限
+- 是否指明复议机关、诉讼法院，表述是否规范
 
-5. **救济途径告知**：
-   - 行政复议权利告知是否规范
-   - 行政诉讼权利告知是否完整
-   - 复议期限（60日）和诉讼期限（6个月）是否明确
-   - 复议机关是否明确指明
+### 六、尾部信息核查
+- 行政机关名称是否完整，是否设置盖章位置
+- 文书落款日期是否规范书写，与正文逻辑是否一致
+- 是否存在遗漏落款或机构名称错误的情形
 
-6. **执法机关信息**：
-   - 作出决定的行政机关名称是否完整
-   - 作出决定的日期是否明确
-   - 是否标注盖章位置
+### 七、格式与语言规范性审查
+- 是否出现口语化、错别字、标点误用或格式不统一
+- 数字、日期、专有名词的写法是否前后一致
+- 文书结构、编号、段落层级是否清晰规范
 
-### 二、程序合规性审查
-- 检查是否存在程序违法风险
-- 评估处罚程序的合法性
-- 确认程序权利的保障情况
+### 八、逻辑一致性与上下文关联审查
+- 违法事实、证据、法律依据、处罚决定是否逐项对应
+- 当事人信息、时间节点、金额等是否存在矛盾
+- 是否出现语义自相矛盾、因果倒置或关键事实缺失
 
-### 三、格式规范性审查
-- 文书标题规范性
-- 案件编号格式
-- 文书结构完整性
-- 标点符号使用规范
-
-### 四、语言与文本准确性审查
-- 是否使用规范的法律用语，避免口语化、套话或模糊表述
-- 排查错别字、同音/近形字误用、数字/单位书写不规范
-- 检查标点符号是否正确使用（尤其是冒号、顿号、书名号、括号）
-- 名称、时间、金额、地址等关键信息前后是否保持一致
-- 是否存在重复、冗余或明显翻译腔/自动生成痕迹的句子
-- 判断每句话是否准确传达应有含义，避免歧义
-
-### 五、逻辑一致性与上下文关联审查
-- 事实认定与法律适用是否存在跳跃或矛盾
-- 处罚决定与前述事实、法律依据是否一一对应
-- 当事人信息、违规金额、时间节点等是否在全文保持一致
-- 检查是否引用了不存在或前文未出现的事实/证据
-- 判断是否存在上下文断裂、因果倒置、概念混用等现象
-
-### 六、文本语义深度校验（高级要求）
-- 检查容易混淆的专有名词、地名、机构名称是否写错
-- 识别可能的错别字（例如常用字误写、简繁体混用、字符缺失）
-- 检查序号、条款、金额、日期等是否与上下文、标题、证据表述一致
-- 判断引用法律条款与实际事实是否匹配，避免误援引或条款缺失
-- 分析是否存在不合理推断、逻辑闭合缺陷或潜在自相矛盾表述
-- 如果发现严重不合理的推理、数字明显错误或事实矛盾，请特别说明原因
+### 九、文本语义深度校验（高级要求）
+- 专有名词、地名、机构名称是否准确
+- 序号、条款、金额、日期等是否与上下文一致
+- 是否存在逻辑漏洞、推理错误或明显不合理的表述
+- 对严重不一致或重大疑点需重点说明原因
 
 ## 输出格式要求
 请严格按照以下JSON格式输出分析结果：
@@ -133,7 +105,7 @@ ${content.text}
   "issues": [
     {
       "type": "critical|warning|info",
-      "category": "必备要素|程序规范|格式要求|语言规范|救济途径",
+      "category": "首部信息|当事人信息|违法事实与证据|处罚依据与决定|履行与权利告知|尾部信息|格式与语言规范|逻辑一致性",
       "title": "问题标题",
       "description": "具体问题描述",
       "location": "问题出现的具体位置",
@@ -382,84 +354,19 @@ function extractSimpleAnalysis(aiResponse: string): Omit<AIAnalysisResult, 'proc
 /**
  * 回退分析方法（当AI API不可用时使用专业审查规则）
  */
-function performFallbackAnalysis(content: DocumentContent, structure: DocumentStructure): AIAnalysisResult {
-  const issues: AIAnalysisIssue[] = []
-  const allRules = getAllReviewRules()
-
-  // 使用专业审查规则进行分析
-  allRules.forEach((rule, index) => {
-    try {
-      const result = rule.checkFunction(content, structure)
-
-      if (!result.passed && result.issues.length > 0) {
-        // 为每个发现的问题创建一个AIAnalysisIssue
-        result.issues.forEach((issueText, issueIndex) => {
-          const suggestion = result.suggestions[issueIndex] || result.suggestions[0] || '建议按照相关法规要求进行修改'
-
-          issues.push({
-            id: `rule_${rule.id}_${issueIndex}`,
-            type: rule.severity,
-            category: rule.category,
-            title: rule.name,
-            description: `${issueText}。${rule.description}`,
-            location: '相关段落',
-            suggestion: suggestion,
-            confidence: 88 // 基于规则的分析具有较高可信度
-          })
-        })
-      }
-    } catch (error) {
-      console.error(`规则 ${rule.id} 执行失败:`, error)
-      // 忽略单个规则错误，继续执行其他规则
-    }
-  })
-
-  // 计算评分（基于问题数量和严重性）
-  const criticalIssues = issues.filter(issue => issue.type === 'critical').length
-  const warningIssues = issues.filter(issue => issue.type === 'warning').length
-  const infoIssues = issues.filter(issue => issue.type === 'info').length
-
-  let languageScore = 100
-  let logicScore = 100
-
-  // 语言相关扣分
-  const languageIssues = issues.filter(issue => issue.category === '语言规范' || issue.category === '格式要求')
-  languageScore -= languageIssues.filter(i => i.type === 'critical').length * 20
-  languageScore -= languageIssues.filter(i => i.type === 'warning').length * 10
-  languageScore -= languageIssues.filter(i => i.type === 'info').length * 5
-
-  // 逻辑相关扣分
-  const logicIssues = issues.filter(issue => issue.category === '必备要素' || issue.category === '程序规范' || issue.category === '救济途径')
-  logicScore -= logicIssues.filter(i => i.type === 'critical').length * 20
-  logicScore -= logicIssues.filter(i => i.type === 'warning').length * 10
-  logicScore -= logicIssues.filter(i => i.type === 'info').length * 5
-
-  languageScore = Math.max(0, languageScore)
-  logicScore = Math.max(0, logicScore)
-
-  // 生成整体评估
-  let overallAssessment = ''
-  if (criticalIssues === 0 && warningIssues <= 2 && infoIssues <= 5) {
-    overallAssessment = '文书质量良好，符合基本规范要求，建议关注细节完善'
-  } else if (criticalIssues === 0 && warningIssues <= 5) {
-    overallAssessment = '文书质量一般，存在一些规范性问题，需要按优先级改进'
-  } else if (criticalIssues <= 2) {
-    overallAssessment = '文书存在重要问题，需要重点关注法定要素和程序合规性'
-  } else {
-    overallAssessment = '文书质量较差，存在多项严重问题，建议全面审查和修订'
-  }
-
+function performFallbackAnalysis(_content: DocumentContent, _structure: DocumentStructure): AIAnalysisResult {
   return {
-    issues,
+    issues: [],
     summary: {
-      totalIssues: issues.length,
-      languageScore,
-      logicScore,
-      overallAssessment: overallAssessment + '（基于专业规则分析）'
+      totalIssues: 0,
+      languageScore: 90,
+      logicScore: 90,
+      overallAssessment: 'AI语义分析未启用，本次仅依据规则审查结果评估。'
     },
     processingDetails: {
-      modelUsed: 'professional-rules-engine',
-      processingTime: 100
+      modelUsed: 'rule-fallback-disabled',
+      processingTime: 0
     }
   }
 }
+

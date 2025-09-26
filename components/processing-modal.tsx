@@ -159,14 +159,14 @@ export function ProcessingModal({
       if (controller.signal.aborted) return
 
       // Step 2: Content Extraction
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await new Promise(resolve => setTimeout(resolve, 700))
       setSteps((prev) => prev.map((step, index) => (index === 0 ? { ...step, status: "completed" } : step)))
       setOverallProgress(20)
 
       setCurrentStep(1)
       setSteps((prev) => prev.map((step, index) => (index === 1 ? { ...step, status: "processing" } : step)))
 
-      await new Promise(resolve => setTimeout(resolve, 300))
+      await new Promise(resolve => setTimeout(resolve, 600))
       setSteps((prev) => prev.map((step, index) => (index === 1 ? { ...step, status: "completed" } : step)))
       setOverallProgress(40)
 
@@ -214,7 +214,7 @@ export function ProcessingModal({
       setCurrentStep(3)
       setSteps((prev) => prev.map((step, index) => (index === 3 ? { ...step, status: "processing" } : step)))
 
-      await new Promise(resolve => setTimeout(resolve, 800))
+      await new Promise(resolve => setTimeout(resolve, 1500))
       setSteps((prev) => prev.map((step, index) => (index === 3 ? { ...step, status: "completed" } : step)))
       setOverallProgress(85)
 
@@ -224,7 +224,7 @@ export function ProcessingModal({
       setCurrentStep(4)
       setSteps((prev) => prev.map((step, index) => (index === 4 ? { ...step, status: "processing" } : step)))
 
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await new Promise(resolve => setTimeout(resolve, 900))
       setSteps((prev) => prev.map((step, index) => (index === 4 ? { ...step, status: "completed" } : step)))
       setOverallProgress(100)
 

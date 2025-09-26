@@ -19,7 +19,7 @@ const defaultResults = {
   infoIssues: 2,
   processingTime: "2.3秒",
   overallScore: 82,
-  aiEnabled: true,
+  aiEnabled: false,
   files: [
     {
       id: "file_1",
@@ -58,7 +58,7 @@ const defaultResults = {
         {
           id: "issue_4",
           type: "warning",
-          category: "救济途径",
+          category: "履行与权利告知",
           title: "行政复议期限表述不准确",
           description: "行政复议申请期限表述为'30日内'，应明确为'60日内'",
           location: "第3页，救济途径告知",

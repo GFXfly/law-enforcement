@@ -376,14 +376,15 @@ export function validateDocumentDetailed(content: DocumentContent, structure: Do
       try {
         const result = rule.checkFunction(content, structure)
 
-        if (!result.passed && result.issues.length > 0) {
+        // 新的返回格式是 ReviewIssue[] 数组
+        if (Array.isArray(result) && result.length > 0) {
           const issueData = {
             ruleId: rule.id,
             ruleName: rule.name,
             severity: rule.severity,
             description: rule.description,
-            issues: result.issues,
-            suggestions: result.suggestions
+            issues: result.map(issue => issue.problem),
+            suggestions: result.map(issue => issue.solution)
           }
 
           categoryIssues.push(issueData)
@@ -395,7 +396,7 @@ export function validateDocumentDetailed(content: DocumentContent, structure: Do
             'warning': 10,
             'info': 5
           }
-          categoryScore -= deductionMap[rule.severity] * result.issues.length
+          categoryScore -= deductionMap[rule.severity] * result.length
         }
       } catch (error) {
         console.error(`规则检查失败 [${rule.id}]:`, error)
