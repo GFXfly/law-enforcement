@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { parseDocumentContent, analyzeDocumentStructure, validateDocumentType } from "@/lib/document-processor"
-import { performAIAnalysis, type AIAnalysisOptions } from "@/lib/ai-analysis-service"
+import { performAIAnalysis, performRuleValidation, type AIAnalysisOptions } from "@/lib/ai-analysis-service"
 import { getAllReviewRules } from "@/lib/administrative-penalty-rules"
 import { storeProcessingResult, generateJobId } from "@/lib/storage"
 
@@ -100,8 +100,16 @@ export async function POST(request: NextRequest) {
           console.log('[Processing] AI语义审查已暂时停用，本次仅执行规则审查')
         }
 
-        // Step 7: Generate final results
-        const allIssues = [...ruleCheckResults.issues, ...aiAnalysisResults.issues]
+        // Step 7: AI复合验证 - 过滤规则检测的误判
+        console.log(`[Processing] Step 6: AI复合验证 for ${file.name}`)
+        const validatedRuleIssues = aiProcessingEnabled && ruleCheckResults.issues.length > 0
+          ? await performRuleValidation(documentContent, ruleCheckResults.issues)
+          : ruleCheckResults.issues
+
+        console.log(`[Processing] 规则验证结果 for ${file.name}: 原问题${ruleCheckResults.issues.length}个，过滤后${validatedRuleIssues.length}个`)
+
+        // Step 8: Generate final results
+        const allIssues = [...validatedRuleIssues, ...aiAnalysisResults.issues]
         const criticalIssues = allIssues.filter(issue => issue.type === "critical")
         const warningIssues = allIssues.filter(issue => issue.type === "warning")
         const infoIssues = allIssues.filter(issue => issue.type === "info")

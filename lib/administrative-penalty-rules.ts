@@ -341,7 +341,16 @@ const FORMAT_CHECK_RULES: PenaltyReviewRule[] = [
         const expandedParagraph = paragraph
           .replace(/\u00A0/g, ' ')
           .replace(/[\u2000-\u200B]/g, ' ')
-        const hasIndent = INDENTATION_REGEX.test(expandedParagraph) || /^\t/.test(paragraph) || htmlHasIndentation(htmlParagraphs[index] || '')
+
+        // 增强缩进检测逻辑 - 更宽松的检测条件
+        const hasIndent =
+          INDENTATION_REGEX.test(expandedParagraph) || // 原有的空格检测
+          /^\t/.test(paragraph) || // Tab缩进
+          htmlHasIndentation(htmlParagraphs[index] || '') || // HTML样式缩进
+          /^[\u3000]{1,}/.test(paragraph) || // 全角空格缩进（更宽松）
+          /^[ ]{2,}/.test(paragraph) || // 至少2个半角空格
+          /^\s{2,}/.test(paragraph) || // 任意2个以上空白字符
+          paragraph !== paragraph.trimStart() // 任何形式的首位空白
 
         if (!hasIndent) {
           missingParagraphs.push(getParagraphLocation(index))

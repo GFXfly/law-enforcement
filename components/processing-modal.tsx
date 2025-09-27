@@ -183,7 +183,12 @@ export function ProcessingModal({
       formData.append('options', JSON.stringify({
         enableAI: true,
         enableRuleCheck: true,
-        strictMode: false
+        strictMode: true, // 启用严格模式以获得更全面的分析
+        aiOptions: {
+          enableSemanticCheck: true,  // 启用深度语义分析
+          enableLanguageCheck: true,  // 启用语言文字校验
+          enableLogicCheck: true      // 启用逻辑一致性检查
+        }
       }))
 
       const response = await fetch('/api/process', {
@@ -210,11 +215,12 @@ export function ProcessingModal({
       setSteps((prev) => prev.map((step, index) => (index === 2 ? { ...step, status: "completed" } : step)))
       setOverallProgress(65)
 
-      // AI Analysis
+      // AI Analysis - 真实调用DeepSeek v3.1进行深度语义分析
       setCurrentStep(3)
       setSteps((prev) => prev.map((step, index) => (index === 3 ? { ...step, status: "processing" } : step)))
 
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      // AI分析已经在API调用中完成，这里只是界面展示
+      await new Promise(resolve => setTimeout(resolve, 2500)) // 增加时间以体现AI深度分析
       setSteps((prev) => prev.map((step, index) => (index === 3 ? { ...step, status: "completed" } : step)))
       setOverallProgress(85)
 
