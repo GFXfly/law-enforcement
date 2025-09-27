@@ -1,0 +1,40 @@
+name: Deploy to ECS
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Rsync code to ECS (skip heavy folders)
+        run: |
+          rsync -az --delete \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '.next' \
+            -e "ssh -p ${{ secrets.ECS_PORT }} -o StrictHostKeyChecking=no" \
+            ./ ${{ secrets.ECS_USER }}@${{ secrets.ECS_HOST }}:${{ secrets.ECS_PATH }}/
+
+      - name: Install deps + build + restart pm2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ECS_HOST }}
+          username: ${{ secrets.ECS_USER }}
+          port: ${{ secrets.ECS_PORT }}
+          script: |
+            set -e
+            cd "${{ secrets.ECS_PATH }}"
+            npm install --registry=https://registry.npmmirror.com
+            npm run build
+            pm2 start npm --name law-enforcement -- start || pm2 restart law-enforcement
+            pm2 save
