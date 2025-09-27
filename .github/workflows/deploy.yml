@@ -33,8 +33,16 @@ jobs:
           port: ${{ secrets.ECS_PORT }}
           script: |
             set -e
+            export PATH=$PATH:/usr/local/bin:/usr/bin
+            mkdir -p "${{ secrets.ECS_PATH }}"
             cd "${{ secrets.ECS_PATH }}"
+            echo "PWD=$(pwd)"
+            echo "node=$(node -v || true)  npm=$(npm -v || true)  pm2=$(pm2 -v || true)"
             npm install --registry=https://registry.npmmirror.com
             npm run build
-            pm2 start npm --name law-enforcement -- start || pm2 restart law-enforcement
+            if pm2 describe law-enforcement >/dev/null 2>&1; then
+              pm2 restart law-enforcement
+            else
+              pm2 start npm --name law-enforcement -- start
+            fi
             pm2 save
