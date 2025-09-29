@@ -6,7 +6,7 @@ import { Providers } from '@/components/providers'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: '审查结果',
+  title: 'deepseek学习助手',
   description: '执法文书智能审查',
   generator: '审查系统',
 }
