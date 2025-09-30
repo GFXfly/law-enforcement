@@ -8,6 +8,10 @@ import { FileResultsList } from "@/components/file-results-list"
 import { Button } from "@/components/ui/button"
 import { Download } from "lucide-react"
 
+// 客户端组件,禁用静态生成和缓存
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+
 // Default fallback data if no real results are found
 const defaultResults = {
   id: "penalty_check_20250924_001",
