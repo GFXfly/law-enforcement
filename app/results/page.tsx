@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, Suspense } from "react"
 import { useSearchParams } from "next/navigation"
 import { Header } from "@/components/header"
 import { ResultsOverview } from "@/components/results-overview"
@@ -11,6 +11,7 @@ import { Download } from "lucide-react"
 // 客户端组件,禁用静态生成和缓存
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
+export const runtime = 'nodejs'
 
 // Default fallback data if no real results are found
 const defaultResults = {
@@ -109,7 +110,7 @@ const defaultResults = {
   ],
 }
 
-export default function ResultsPage() {
+function ResultsContent() {
   const [results, setResults] = useState(defaultResults)
   const [isLoading, setIsLoading] = useState(true)
   const searchParams = useSearchParams()
@@ -265,5 +266,25 @@ export default function ResultsPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+export default function ResultsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-4 py-8">
+          <div className="flex items-center justify-center py-20">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">正在加载审查结果...</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    }>
+      <ResultsContent />
+    </Suspense>
   )
 }
