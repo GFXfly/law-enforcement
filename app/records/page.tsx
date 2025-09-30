@@ -7,6 +7,10 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { FileText, Calendar, Clock, Eye, Trash2 } from "lucide-react"
 
+// 客户端组件,禁用静态生成和缓存
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
+
 interface ReviewRecord {
   id: string
   fileName: string

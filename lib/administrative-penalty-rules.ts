@@ -328,13 +328,18 @@ const FORMAT_CHECK_RULES: PenaltyReviewRule[] = [
         if (index < 3) return
 
         const trimmed = paragraph.trim()
-        if (trimmed.length < 8) return
+        if (trimmed.length < 12) return  // 提高最小长度要求，减少误报
 
-        const isListHeading = /^[（(]?[一二三四五六七八九十0-9]+[、.．]/.test(trimmed) || /^第[一二三四五六七八九十百]+[章节条款]/.test(trimmed)
+        const isListHeading = /^[（(]?[一二三四五六七八九十0-9]+[、.．）)]/.test(trimmed) || /^第[一二三四五六七八九十百]+[章节条款]/.test(trimmed)
         if (isListHeading) return
 
-        // 标签型段落（如“住所：”“法定代表人：”）通常不做首行缩进要求
-        if (/^[\u4e00-\u9fa5（）()\s]{1,15}[：:]/.test(trimmed)) {
+        // 扩展标签型段落识别，包含更多常见格式
+        if (/^[\u4e00-\u9fa5（）()、，。\s]{1,20}[：:]/.test(trimmed)) {
+          return
+        }
+
+        // 排除标题性质的段落
+        if (/^[一二三四五六七八九十]+[、．.]/.test(trimmed)) {
           return
         }
 
@@ -357,12 +362,14 @@ const FORMAT_CHECK_RULES: PenaltyReviewRule[] = [
         }
       })
 
-      if (missingParagraphs.length > 0) {
+      // 只有缺失缩进的段落数量达到一定比例才报告（避免格式特殊的文档误报）
+      const totalCheckedParagraphs = paragraphs.length - 3
+      if (missingParagraphs.length > 0 && missingParagraphs.length >= Math.min(3, totalCheckedParagraphs * 0.3)) {
         issues.push({
-          problem: `检测到以下段落未首行缩进两个字符：${missingParagraphs.join('、')}`,
+          problem: `检测到以下段落未首行缩进两个字符：${missingParagraphs.slice(0, 5).join('、')}${missingParagraphs.length > 5 ? '等' : ''}`,
           location: '正文段落',
           solution: '请为上述段落设置首行缩进2字符或在段首补足两个全角空格。',
-          severity: 'warning'
+          severity: 'info'  // 降低为提示级别
         })
       }
 
@@ -552,49 +559,53 @@ const MAIN_CONTENT_RULES: PenaltyReviewRule[] = [
       const text = content.text
       const partySection = getPartySection(text)
 
-      if (!/(当事人|被处罚人)[：:].{2,30}/.test(partySection)) {
+      // 只有当当事人字段存在但内容明显不足时才报错
+      const hasPartyKeyword = /(当事人|被处罚人)[：:]/.test(partySection)
+      if (hasPartyKeyword && !/(当事人|被处罚人)[：:].{2,}/.test(partySection)) {
         issues.push({
           problem: '未明确列示当事人姓名或名称',
           location: '当事人基本信息段',
-          solution: '补充“当事人：”或“被处罚人：”及完整姓名/单位名称',
+          solution: '补充"当事人："或"被处罚人："及完整姓名/单位名称',
           severity: 'critical'
         })
       }
 
-      const addressRegex = /(住所|住址|地址|经营场所|经营地址)(（[^）]*）)?\s*[：:].{5,}/
+      // 扩展地址识别模式，减少误报
+      const addressRegex = /(住所|住址|地址|经营场所|经营地址|注册地址|通讯地址)(（[^）]*）)?\s*[：:].{3,}/
 
-      if (!addressRegex.test(partySection)) {
+      if (hasPartyKeyword && !addressRegex.test(partySection)) {
         issues.push({
           problem: '当事人地址或经营场所信息缺失',
           location: '当事人基本信息段',
           solution: '补充详细地址或经营场所信息，确保可送达',
-          severity: 'critical'
+          severity: 'warning'  // 降低严重程度
         })
       }
 
       const hasCompany = isUnitParty(partySection)
-      const idRegex = /(身份证|居民身份证|身份证号|身份证号码|其他有效证件)[^\n]{0,12}[：:]\s*[0-9]{17}[0-9Xx]/
-      const creditRegex = /(统一社会信用代码|组织机构代码|税务登记证号)[^\n]{0,12}[：:]\s*[0-9A-Z\-]{8,}/
+      // 扩展身份证号匹配，支持空格和其他格式
+      const idRegex = /(身份证|居民身份证|身份证号|身份证号码|公民身份号码|证件号|证件号码)[^\n]{0,15}[：:]\s*[0-9X]{15,18}/i
+      const creditRegex = /(统一社会信用代码|社会信用代码|信用代码|组织机构代码|营业执照号|注册号)[^\n]{0,15}[：:]\s*[0-9A-Z\-]{8,}/
 
       const hasIdInfo = idRegex.test(partySection)
       const hasCreditInfo = creditRegex.test(partySection)
 
-      if (hasCompany) {
+      if (hasCompany && hasPartyKeyword) {
         if (!hasCreditInfo) {
           issues.push({
             problem: '单位当事人未提供统一社会信用代码或组织机构代码',
             location: '当事人基本信息段',
             solution: '补充单位统一社会信用代码、组织机构代码等主体身份信息',
-            severity: 'critical'
+            severity: 'warning'  // 降低严重程度
           })
         }
-      } else {
+      } else if (!hasCompany && hasPartyKeyword) {
         if (!hasIdInfo) {
           issues.push({
             problem: '个人当事人未提供身份证号码或有效证件号码',
             location: '当事人基本信息段',
             solution: '补充个人身份证号码或其他有效身份证明信息',
-            severity: 'critical'
+            severity: 'warning'  // 降低严重程度
           })
         }
       }
@@ -637,30 +648,35 @@ const MAIN_CONTENT_RULES: PenaltyReviewRule[] = [
       const issues: ReviewIssue[] = []
       const text = content.text
 
-      if (!/(违法事实|违法行为|经查|查明)/.test(text)) {
+      const hasFactSection = /(违法事实|违法行为|经查|查明|案件来源|调查发现)/.test(text)
+
+      if (!hasFactSection) {
         issues.push({
           problem: '未明确设置违法事实认定段落',
           location: '违法事实部分',
-          solution: '增加“违法事实：……”段落，说明调查情况及事实认定',
+          solution: '增加"违法事实：……"段落，说明调查情况及事实认定',
           severity: 'critical'
         })
       }
 
-      if (!DATE_PATTERN.test(text) && !ALT_DATE_PATTERN.test(text)) {
+      // 只有在有违法事实段落但缺少时间时才报错
+      if (hasFactSection && !DATE_PATTERN.test(text) && !ALT_DATE_PATTERN.test(text)) {
         issues.push({
           problem: '违法事实缺少明确的发生时间',
           location: '违法事实部分',
-          solution: '补充违法行为发生的具体日期，例如“2025年5月10日”',
-          severity: 'critical'
+          solution: '补充违法行为发生的具体日期，例如"2025年5月10日"',
+          severity: 'warning'  // 降低严重程度
         })
       }
 
-      if (!/(在.*?进行|于.*?处|地点为|发生在)/.test(text)) {
+      // 扩展地点表述的识别模式
+      const hasLocation = /(在.*?[进行|经营|销售|生产]|于.*?处|地点为|发生在|位于|营业场所|经营地址|经营场所|现场检查)/.test(text)
+      if (hasFactSection && !hasLocation) {
         issues.push({
           problem: '违法事实未说明具体地点',
           location: '违法事实部分',
           solution: '写明违法行为发生地点或经营场所，确保要素完整',
-          severity: 'warning'
+          severity: 'info'  // 降低为提示级别
         })
       }
 
@@ -676,14 +692,20 @@ const MAIN_CONTENT_RULES: PenaltyReviewRule[] = [
     checkFunction: (content) => {
       const issues: ReviewIssue[] = []
       const text = content.text
-      const evidenceKeywords = text.match(/证据[一二三四五六七八九十0-9]|询问笔录|现场检查笔录|检测报告|鉴定意见|票据|照片|凭证/g)
 
-      if (!evidenceKeywords || evidenceKeywords.length < 2) {
+      // 扩展证据关键词，包含更多实际使用的表述
+      const evidenceKeywords = text.match(/证据[一二三四五六七八九十0-9]|询问笔录|现场检查笔录|检查笔录|调查笔录|检测报告|检验报告|鉴定意见|票据|照片|凭证|扣押清单|证明材料|书证|物证|视听资料|电子数据/g)
+
+      // 检查文书中是否提到证据或相关程序
+      const hasEvidenceMention = /(有证据证明|经调查|经查|查明|调查取证|现场检查|抽样检验|送检|经审查)/.test(text)
+
+      // 只有在明确提到证据流程但缺少具体证据时才报警告
+      if (hasEvidenceMention && (!evidenceKeywords || evidenceKeywords.length < 2)) {
         issues.push({
           problem: '未见对证据材料的逐项列举，难以支撑事实认定',
           location: '证据说明部分',
-          solution: '以“证据一……证据二……”形式列出主要证据及证明目的',
-          severity: 'warning'
+          solution: '以"证据一……证据二……"形式列出主要证据及证明目的',
+          severity: 'info'  // 降低为提示级别
         })
       }
 
@@ -867,23 +889,29 @@ const FULFILLMENT_AND_RIGHTS_RULES: PenaltyReviewRule[] = [
         missing.push('行政诉讼救济途径')
       }
 
-      if (missing.length > 0) {
-        const components = missing.join('、')
-        const solutionParts: string[] = []
+      // 只有两个都缺失时才报critical，单独缺一个降低严重程度
+      if (missing.length === 2) {
+        issues.push({
+          problem: `未检测到行政复议和行政诉讼救济途径的完整表述`,
+          location: '救济途径告知部分',
+          solution: '补充"如不服本决定，可以在收到本决定书之日起六十日内向××申请行政复议；也可以在收到本决定书之日起六个月内直接向人民法院提起行政诉讼"',
+          severity: 'critical'
+        })
+      } else if (missing.length === 1) {
+        const component = missing[0]
+        let solution = ''
 
         if (!remedy.review.present) {
-          solutionParts.push('补充“如不服本决定，可以在收到本决定书之日起六十日内向××申请行政复议”')
-        }
-
-        if (!remedy.litigation.present) {
-          solutionParts.push('补充“也可以在收到本决定书之日起六个月内直接向人民法院提起行政诉讼”')
+          solution = '补充"如不服本决定，可以在收到本决定书之日起六十日内向××申请行政复议"'
+        } else {
+          solution = '补充"也可以在收到本决定书之日起六个月内直接向人民法院提起行政诉讼"'
         }
 
         issues.push({
-          problem: `未检测到${components}的完整表述`,
-          location: '第十部分救济途径',
-          solution: solutionParts.join('；'),
-          severity: 'critical'
+          problem: `未检测到${component}的完整表述`,
+          location: '救济途径告知部分',
+          solution,
+          severity: 'warning'  // 单独缺失一个降低为warning
         })
       }
 
@@ -1279,11 +1307,14 @@ const CONSISTENCY_RULES: PenaltyReviewRule[] = [
     checkFunction: (content) => {
       const issues: ReviewIssue[] = []
       const paragraphs = ensureArray(content.paragraphs)
+
+      // 只检测最明显的错误标点重复，移除可能有合理使用场景的组合
       const illegalPairs = new Set([
-        '，，', '、、', '。。', '：：', '；；', '！！', '？？',
-        '，。', '。，', '，；', '；，', '，：', '：，', '，？', '？，', '，！', '！，',
-        '。：', '：。', '。；', '；。', '。？', '？。', '。！', '！。'
+        '，，', '。。', '：：', '；；',
+        '，。', '。，'
       ])
+
+      const foundIssues = new Set<string>()  // 用于去重，避免同一问题重复报告
 
       paragraphs.forEach((paragraph, index) => {
         const normalized = paragraph.replace(/\s+/g, '')
@@ -1291,13 +1322,17 @@ const CONSISTENCY_RULES: PenaltyReviewRule[] = [
         for (let i = 0; i < normalized.length - 1; i++) {
           const pair = normalized.slice(i, i + 2)
           if (illegalPairs.has(pair)) {
-            issues.push({
-              problem: `检测到不规范的连续标点“${pair}”`,
-              location: getParagraphLocation(index),
-              solution: '请检查该处标点，通常应保留一个或调整为规范组合。',
-              severity: 'warning'
-            })
-            break
+            const issueKey = `${pair}_${getParagraphLocation(index)}`
+            if (!foundIssues.has(issueKey)) {
+              foundIssues.add(issueKey)
+              issues.push({
+                problem: `检测到不规范的连续标点"${pair}"`,
+                location: getParagraphLocation(index),
+                solution: '请检查该处标点，通常应保留一个或调整为规范组合。',
+                severity: 'info'  // 降低为提示级别
+              })
+            }
+            break  // 每个段落只报告一次
           }
         }
       })

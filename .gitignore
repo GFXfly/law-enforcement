@@ -24,8 +24,20 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next-env.d.tsnode_modules/
+next-env.d.ts
+
+# node modules
+node_modules/
+
+# python
 .venv/
 __pycache__/
+
+# system files
 .DS_Store
+
+# environment files
 .env
+
+# compressed files
+*.tar.gz
