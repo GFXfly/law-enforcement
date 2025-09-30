@@ -28,6 +28,7 @@ interface FileProcessingDetails {
   ruleSummaries?: RuleSummary[]
   modelUsed?: string
   aiAnalyzed?: boolean
+  ruleValidationDiscarded?: string[]
 }
 
 interface FileResult {

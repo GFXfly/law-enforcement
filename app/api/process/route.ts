@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { parseDocumentContent, analyzeDocumentStructure, validateDocumentType } from "@/lib/document-processor"
-import { performAIAnalysis, type AIAnalysisOptions } from "@/lib/ai-analysis-service"
+import { performAIAnalysis, performRuleValidation, type AIAnalysisOptions, type RuleIssueForValidation } from "@/lib/ai-analysis-service"
 import { getAllReviewRules } from "@/lib/administrative-penalty-rules"
 import { storeProcessingResult, generateJobId } from "@/lib/storage"
 
@@ -70,6 +70,18 @@ export async function POST(request: NextRequest) {
         // Step 5: Rule-based checks (basic implementation)
         console.log(`[Processing] Step 4: Running rule checks for ${file.name}`)
         const ruleCheckResults = await performRuleChecks(documentContent, documentStructure, options)
+        let validatedRuleIssues = ruleCheckResults.issues
+        let discardedRuleIssueIds: string[] = []
+
+        if (aiProcessingEnabled && validatedRuleIssues.length > 0) {
+          console.log(`[Processing] Step 5a: AI validation for rule issues of ${file.name}`)
+          const validationResult = await performRuleValidation(documentContent, validatedRuleIssues as RuleIssueForValidation[], {
+            strictMode: options.strictMode || false
+          })
+          validatedRuleIssues = validationResult.keptIssues
+          discardedRuleIssueIds = validationResult.discardedIssueIds
+          console.log(`[Processing] AI validation filtered ${discardedRuleIssueIds.length} rule issues`)
+        }
 
         // Step 6: AI analysis using professional service
         console.log(`[Processing] Step 5: AI analysis for ${file.name}`)
@@ -101,7 +113,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Step 7: Generate final results
-        const allIssues = [...ruleCheckResults.issues, ...aiAnalysisResults.issues]
+        const allIssues = [...validatedRuleIssues, ...aiAnalysisResults.issues]
         const criticalIssues = allIssues.filter(issue => issue.type === "critical")
         const warningIssues = allIssues.filter(issue => issue.type === "warning")
         const infoIssues = allIssues.filter(issue => issue.type === "info")
@@ -129,6 +141,7 @@ export async function POST(request: NextRequest) {
             rulesChecked: options.enableRuleCheck !== false,
             aiAnalyzed: aiProcessingEnabled,
             ruleSummaries: ruleCheckResults.summaries,
+            ruleValidationDiscarded: discardedRuleIssueIds
           }
         })
 
