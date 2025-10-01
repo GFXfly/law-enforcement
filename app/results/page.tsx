@@ -7,10 +7,11 @@ import { ResultsOverview } from "@/components/results-overview"
 import { FileResultsList } from "@/components/file-results-list"
 import { Button } from "@/components/ui/button"
 import { Download } from "lucide-react"
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, BorderStyle } from "docx"
+import { saveAs } from "file-saver"
 
 // 客户端组件,禁用静态生成和缓存
 export const dynamic = 'force-dynamic'
-export const revalidate = 0
 
 // Default fallback data if no real results are found
 const defaultResults = {
@@ -211,25 +212,214 @@ function ResultsContent() {
     )
   }
 
+  const handleExportReport = async () => {
+    try {
+      // 创建文档
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            // 标题
+            new Paragraph({
+              text: "行政处罚决定书审查报告",
+              heading: HeadingLevel.HEADING_1,
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 400 }
+            }),
+
+            // 基本信息
+            new Paragraph({
+              text: "一、基本信息",
+              heading: HeadingLevel.HEADING_2,
+              spacing: { before: 200, after: 200 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "审查时间：", bold: true }),
+                new TextRun(new Date(results.timestamp).toLocaleString('zh-CN'))
+              ],
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "处理文件数：", bold: true }),
+                new TextRun(`${results.totalFiles} 个`)
+              ],
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "发现问题数：", bold: true }),
+                new TextRun(`${results.totalIssues} 个`)
+              ],
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "综合评分：", bold: true }),
+                new TextRun(`${results.overallScore} 分`)
+              ],
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "处理时间：", bold: true }),
+                new TextRun(results.processingTime)
+              ],
+              spacing: { after: 300 }
+            }),
+
+            // 问题统计
+            new Paragraph({
+              text: "二、问题统计",
+              heading: HeadingLevel.HEADING_2,
+              spacing: { before: 200, after: 200 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "严重问题：", bold: true, color: "DC2626" }),
+                new TextRun(`${results.criticalIssues} 个`)
+              ],
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "警告问题：", bold: true, color: "EA580C" }),
+                new TextRun(`${results.warningIssues} 个`)
+              ],
+              spacing: { after: 100 }
+            }),
+            new Paragraph({
+              children: [
+                new TextRun({ text: "提示信息：", bold: true, color: "2563EB" }),
+                new TextRun(`${results.infoIssues} 个`)
+              ],
+              spacing: { after: 300 }
+            }),
+
+            // 详细问题列表
+            new Paragraph({
+              text: "三、详细问题列表",
+              heading: HeadingLevel.HEADING_2,
+              spacing: { before: 200, after: 200 }
+            }),
+
+            // 遍历每个文件
+            ...results.files.flatMap((file: any, fileIndex: number) => [
+              new Paragraph({
+                text: `${fileIndex + 1}. ${file.name}`,
+                heading: HeadingLevel.HEADING_3,
+                spacing: { before: 200, after: 150 }
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "文件大小：", bold: true }),
+                  new TextRun(file.size)
+                ],
+                spacing: { after: 100 }
+              }),
+              new Paragraph({
+                children: [
+                  new TextRun({ text: "评分：", bold: true }),
+                  new TextRun(`${file.score} 分`)
+                ],
+                spacing: { after: 200 }
+              }),
+
+              // 遍历每个问题
+              ...file.issues.flatMap((issue: any, issueIndex: number) => {
+                const issueTypeText = issue.type === 'critical' ? '严重问题' :
+                                     issue.type === 'warning' ? '警告问题' : '提示信息'
+                const issueColor = issue.type === 'critical' ? 'DC2626' :
+                                  issue.type === 'warning' ? 'EA580C' : '2563EB'
+
+                return [
+                  new Paragraph({
+                    children: [
+                      new TextRun({
+                        text: `问题 ${issueIndex + 1}：`,
+                        bold: true
+                      }),
+                      new TextRun({
+                        text: `[${issueTypeText}] `,
+                        bold: true,
+                        color: issueColor
+                      }),
+                      new TextRun({
+                        text: issue.title,
+                        bold: true
+                      })
+                    ],
+                    spacing: { before: 150, after: 100 }
+                  }),
+                  new Paragraph({
+                    children: [
+                      new TextRun({ text: "类别：", bold: true }),
+                      new TextRun(issue.category)
+                    ],
+                    spacing: { after: 50 }
+                  }),
+                  new Paragraph({
+                    children: [
+                      new TextRun({ text: "位置：", bold: true }),
+                      new TextRun(issue.location)
+                    ],
+                    spacing: { after: 50 }
+                  }),
+                  new Paragraph({
+                    children: [
+                      new TextRun({ text: "描述：", bold: true }),
+                      new TextRun(issue.description)
+                    ],
+                    spacing: { after: 50 }
+                  }),
+                  new Paragraph({
+                    children: [
+                      new TextRun({ text: "建议：", bold: true }),
+                      new TextRun(issue.suggestion)
+                    ],
+                    spacing: { after: 150 }
+                  })
+                ]
+              })
+            ])
+          ]
+        }]
+      })
+
+      // 生成并下载文档
+      const blob = await Packer.toBlob(doc)
+      saveAs(blob, `审查报告_${new Date().toISOString().split('T')[0]}.docx`)
+    } catch (error) {
+      console.error('导出报告失败:', error)
+      alert('导出报告失败，请重试')
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto px-4 py-8">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col items-center text-center">
           <div>
             <h1 className="text-3xl font-bold">审查结果</h1>
             <p className="text-muted-foreground mt-1">
               共处理 {results.totalFiles} 个文件，发现 {results.totalIssues} 个问题
             </p>
           </div>
-          <Button variant="outline" size="sm">
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-4"
+            onClick={handleExportReport}
+          >
             <Download className="h-4 w-4 mr-2" />
             导出报告
           </Button>
         </div>
 
         <ResultsOverview results={results} />
-        <FileResultsList results={results} />
+        <FileResultsList files={results.files} />
       </main>
     </div>
   )

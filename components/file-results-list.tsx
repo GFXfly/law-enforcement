@@ -90,6 +90,10 @@ export function FileResultsList({ files }: FileResultsListProps) {
     }
   }
 
+  if (!files || !Array.isArray(files)) {
+    return null
+  }
+
   return (
     <div className="space-y-6">
       {files.map((file) => {
