@@ -59,27 +59,30 @@ function sanitizeChineseText(text: string): string {
     .replace(/\s+/g, ' ') // 压缩空白
     .replace(/\\"/g, '"') // 还原转义引号
     .replace(/^[\[{]+|[\]}]+$/g, '') // 去除首尾大括号
-    .replace(/^["'“”]+|["'“”]+$/g, '') // 去除首尾引号
+    .replace(/^["'""]+|["'""]+$/g, '') // 去除首尾引号
     .trim()
 
-  // 移除残留的英文键名提示，如 "issues":
+  // 移除残留的英文键名提示，如 "issues": 但保留数字和中文
   result = result.replace(/"[A-Za-z_]+"\s*[:：]/g, '')
 
-  // 去除残留的引号和反引号
-  result = result.replace(/["'“”`]+/g, '')
+  // ⚠️ 修复：只去除非数字、非中文周围的引号，避免误删数字
+  // 改为：去除独立的引号（前后不是数字或中文的引号）
+  result = result.replace(/(?<![0-9\u4e00-\u9fa5])["'""`]+(?![0-9\u4e00-\u9fa5])/g, '')
 
-  // 如果仍然包含大段JSON痕迹，截取前后的有效中文
-  const chineseMatches = result.match(/[\u4e00-\u9fa5][^\u4e00-\u9fa5]*[\u4e00-\u9fa5]/g)
-  if (chineseMatches && chineseMatches.length > 0) {
-    result = chineseMatches.join(' ').trim()
+  // 去除首尾引号（这个保留）
+  result = result.replace(/^["'""`]+|["'""`]+$/g, '')
+
+  // ⚠️ 关键修复：不再使用中文匹配来提取内容，这会丢失数字和标点
+  // 直接使用清理后的文本，只要包含中文就认为有效
+  if (/[\u4e00-\u9fa5]/.test(result)) {
+    // 有中文内容，进行最终清理
+    result = result
+      .replace(/\s*[,;，；]\s*/g, match => match.includes('，') || match.includes('；') ? match.trim() : '，')
+      .replace(/\s*[:：]\s*/g, '：')
+      .replace(/(?<=\p{Script=Han})\s+(?=\p{Script=Han})/gu, '') // 移除中文字符之间的多余空格
+      .replace(/\s+/g, ' ')
+      .trim()
   }
-
-  result = result
-    .replace(/\s*[,;，；]\s*/g, match => match.includes('，') || match.includes('；') ? match.trim() : '，')
-    .replace(/\s*[:：]\s*/g, '：')
-    .replace(/(?<=\p{Script=Han})\s+(?=\p{Script=Han})/gu, '') // 移除中文字符之间的多余空格
-    .replace(/\s+/g, ' ')
-    .trim()
 
   return result.length > 0 ? result : '内容待补充'
 }

@@ -4,6 +4,7 @@
  */
 
 import { DocumentContent, DocumentStructure } from './document-processor'
+import { FormatChecker, type ParagraphFormat } from './word-format-parser'
 
 export interface ReviewIssue {
   problem: string      // 问题描述
@@ -316,60 +317,142 @@ const FORMAT_CHECK_RULES: PenaltyReviewRule[] = [
     name: '正文段落首行缩进',
     category: '文书格式检查',
     severity: 'warning',
-    description: '检查正文段落是否保持首行缩进两个字符',
+    description: '检查正文段落是否保持首行缩进两个字符（标准：18-24pt或0.63-0.84cm）',
     checkFunction: (content) => {
       const issues: ReviewIssue[] = []
-      const paragraphs = ensureArray(content.paragraphs)
-      const htmlParagraphs = getHtmlParagraphs(content.html)
 
-      const missingParagraphs: string[] = []
+      // 优先使用精确的Word格式信息
+      if (content.formatInfo?.paragraphs) {
+        const formatParagraphs = content.formatInfo.paragraphs
+        const missingIndentParagraphs: Array<{ index: number; actualIndent: string }> = []
+        const insufficientIndentParagraphs: Array<{ index: number; actualIndent: string }> = []
 
-      paragraphs.forEach((paragraph, index) => {
-        if (index < 3) return
+        formatParagraphs.forEach((para) => {
+          // 跳过前3段（标题和文号）
+          if (para.index < 3) return
 
-        const trimmed = paragraph.trim()
-        if (trimmed.length < 12) return  // 提高最小长度要求，减少误报
+          // 跳过过短的段落
+          if (para.text.trim().length < 10) return
 
-        const isListHeading = /^[（(]?[一二三四五六七八九十0-9]+[、.．）)]/.test(trimmed) || /^第[一二三四五六七八九十百]+[章节条款]/.test(trimmed)
-        if (isListHeading) return
+          // 排除列表项、编号段落
+          const trimmed = para.text.trim()
+          const isListHeading = /^[（(]?[一二三四五六七八九十0-9]+[、.．）)]/.test(trimmed) ||
+                               /^第[一二三四五六七八九十百]+[章节条款]/.test(trimmed)
+          if (isListHeading) return
 
-        // 扩展标签型段落识别，包含更多常见格式
-        if (/^[\u4e00-\u9fa5（）()、，。\s]{1,20}[：:]/.test(trimmed)) {
-          return
+          // 排除标签型段落
+          if (/^[\u4e00-\u9fa5（）()]{1,15}[：:]/.test(trimmed)) {
+            return
+          }
+
+          // 使用精确的格式检查器
+          const indent = para.indentation.firstLine || 0
+          const indentStr = FormatChecker.formatIndent(indent)
+
+          if (!FormatChecker.hasValidIndent(para)) {
+            if (FormatChecker.hasPartialIndent(para)) {
+              insufficientIndentParagraphs.push({
+                index: para.index,
+                actualIndent: indentStr
+              })
+            } else {
+              missingIndentParagraphs.push({
+                index: para.index,
+                actualIndent: indent > 0 ? indentStr : '无缩进'
+              })
+            }
+          }
+        })
+
+        // 完全缺失缩进
+        if (missingIndentParagraphs.length > 0) {
+          const locations = missingIndentParagraphs.slice(0, 8).map(p => `第${p.index + 1}段(${p.actualIndent})`).join('、')
+          const suffix = missingIndentParagraphs.length > 8 ? `等共${missingIndentParagraphs.length}段` : ''
+
+          issues.push({
+            problem: `以下段落首行缩进不符合标准（应为18-24pt）：${locations}${suffix}`,
+            location: '正文段落',
+            solution: '请在Word中设置首行缩进为2字符（约21pt或0.74cm），或在段首添加两个全角空格',
+            severity: 'warning'
+          })
         }
 
-        // 排除标题性质的段落
-        if (/^[一二三四五六七八九十]+[、．.]/.test(trimmed)) {
-          return
+        // 缩进不足
+        if (insufficientIndentParagraphs.length > 0) {
+          const locations = insufficientIndentParagraphs.slice(0, 8).map(p => `第${p.index + 1}段(${p.actualIndent})`).join('、')
+          const suffix = insufficientIndentParagraphs.length > 8 ? `等共${insufficientIndentParagraphs.length}段` : ''
+
+          issues.push({
+            problem: `以下段落首行缩进不足2字符：${locations}${suffix}`,
+            location: '正文段落',
+            solution: '请调整缩进至标准的2字符（约21pt或0.74cm）',
+            severity: 'info'
+          })
         }
-
-        const expandedParagraph = paragraph
-          .replace(/\u00A0/g, ' ')
-          .replace(/[\u2000-\u200B]/g, ' ')
-
-        // 增强缩进检测逻辑 - 更宽松的检测条件
-        const hasIndent =
-          INDENTATION_REGEX.test(expandedParagraph) || // 原有的空格检测
-          /^\t/.test(paragraph) || // Tab缩进
-          htmlHasIndentation(htmlParagraphs[index] || '') || // HTML样式缩进
-          /^[\u3000]{1,}/.test(paragraph) || // 全角空格缩进（更宽松）
-          /^[ ]{2,}/.test(paragraph) || // 至少2个半角空格
-          /^\s{2,}/.test(paragraph) || // 任意2个以上空白字符
-          paragraph !== paragraph.trimStart() // 任何形式的首位空白
-
-        if (!hasIndent) {
-          missingParagraphs.push(getParagraphLocation(index))
-        }
-      })
-
-      // 只有缺失缩进的段落数量达到一定比例才报告（避免格式特殊的文档误报）
-      const totalCheckedParagraphs = paragraphs.length - 3
-      if (missingParagraphs.length > 0 && missingParagraphs.length >= Math.min(3, totalCheckedParagraphs * 0.3)) {
+      } else {
+        // 降级方案：使用基础文本检查（当Word格式解析失败时）
         issues.push({
-          problem: `检测到以下段落未首行缩进两个字符：${missingParagraphs.slice(0, 5).join('、')}${missingParagraphs.length > 5 ? '等' : ''}`,
-          location: '正文段落',
-          solution: '请为上述段落设置首行缩进2字符或在段首补足两个全角空格。',
-          severity: 'info'  // 降低为提示级别
+          problem: '无法精确检测段落缩进格式（Word格式解析失败）',
+          location: '全文',
+          solution: '请手动检查所有正文段落是否设置了首行缩进2字符（约21pt或0.74cm）',
+          severity: 'info'
+        })
+      }
+
+      return issues
+    }
+  },
+  {
+    id: 'paragraph_line_spacing',
+    name: '段落行间距规范',
+    category: '文书格式检查',
+    severity: 'warning',
+    description: '检查段落行间距是否符合公文格式要求（固定值28磅或1.5倍行距）',
+    checkFunction: (content) => {
+      const issues: ReviewIssue[] = []
+
+      // 优先使用精确的Word格式信息
+      if (content.formatInfo?.paragraphs) {
+        const formatParagraphs = content.formatInfo.paragraphs
+        const problemParagraphs: Array<{ index: number; actualSpacing: string }> = []
+        let checkedCount = 0
+
+        formatParagraphs.forEach((para) => {
+          // 跳过前3段和过短段落
+          if (para.index < 3) return
+          if (para.text.trim().length < 10) return
+
+          checkedCount++
+
+          // 使用精确的格式检查器
+          if (!FormatChecker.hasValidLineSpacing(para)) {
+            problemParagraphs.push({
+              index: para.index,
+              actualSpacing: FormatChecker.formatLineSpacing(para)
+            })
+          }
+        })
+
+        // 如果超过30%的段落不符合行距要求，则报告
+        if (checkedCount > 0 && problemParagraphs.length > 0 &&
+            problemParagraphs.length / checkedCount > 0.3) {
+          const locations = problemParagraphs.slice(0, 5).map(p => `第${p.index + 1}段(${p.actualSpacing})`).join('、')
+          const suffix = problemParagraphs.length > 5 ? `等共${problemParagraphs.length}段` : ''
+
+          issues.push({
+            problem: `多个段落行间距不符合公文格式标准：${locations}${suffix}`,
+            location: '正文段落',
+            solution: '请在Word中选中正文段落，设置行距为"固定值28磅"或"1.5倍行距"',
+            severity: 'warning'
+          })
+        }
+      } else {
+        // 降级方案：提示无法检测
+        issues.push({
+          problem: '无法精确检测段落行间距格式（Word格式解析失败）',
+          location: '全文',
+          solution: '请手动检查所有正文段落行距是否设置为"固定值28磅"或"1.5倍行距"',
+          severity: 'info'
         })
       }
 
@@ -1359,10 +1442,10 @@ const CONSISTENCY_RULES: PenaltyReviewRule[] = [
           return
         }
 
-        const positiveExample = positiveMatches[0]
-        const negativeExample = negativeMatches[0]
+        const positiveExample = positiveMatches[0] || ''
+        const negativeExample = negativeMatches[0] || ''
         const snippetStart = Math.max(0, normalized.indexOf(positiveExample) - 10)
-        const snippetEnd = normalized.indexOf(negativeExample) + negativeExample.length + 10
+        const snippetEnd = normalized.indexOf(negativeExample) + (negativeExample?.length || 0) + 10
         const contextSnippet = normalized.slice(snippetStart, snippetEnd)
 
         issues.push({

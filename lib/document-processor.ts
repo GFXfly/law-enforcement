@@ -1,11 +1,14 @@
 import mammoth from "mammoth"
 import { getAllReviewRules, getRulesBySeverity } from './administrative-penalty-rules'
+import { parseWordFormat, type DocumentFormatInfo, type ParagraphFormat } from './word-format-parser'
 
 export interface DocumentContent {
   text: string
   html: string
   wordCount: number
   paragraphs: string[]
+  // 新增：段落格式信息
+  formatInfo?: DocumentFormatInfo
   metadata: {
     fileName: string
     fileSize: number
@@ -85,11 +88,22 @@ export async function parseDocumentContent(file: File): Promise<DocumentContent>
     // 计算字数
     const wordCount = text.length
 
+    // 新增：解析Word格式信息（深度解析XML）
+    let formatInfo: DocumentFormatInfo | undefined
+    try {
+      formatInfo = await parseWordFormat(file)
+      console.log(`[Format Parser] 成功解析 ${formatInfo.paragraphs.length} 个段落的格式信息`)
+    } catch (error) {
+      console.warn('[Format Parser] Word格式解析失败，将使用基础检查:', error)
+      // 格式解析失败不影响整体流程
+    }
+
     return {
       text,
       html,
       wordCount,
       paragraphs,
+      formatInfo,
       metadata: {
         fileName: file.name,
         fileSize: file.size,

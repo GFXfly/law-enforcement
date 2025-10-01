@@ -175,30 +175,77 @@ export function FileResultsList({ files }: FileResultsListProps) {
                       </div>
 
                       <div className="space-y-3">
-                        {issues.map((issue) => (
-                          <div key={issue.id} className="rounded-lg border border-border/50 bg-muted/40 p-3 space-y-2">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="space-y-1">
-                                <p className="text-sm font-medium text-foreground">{issue.title}</p>
-                                <p className="text-xs text-muted-foreground leading-relaxed">{issue.description}</p>
+                        {issues.map((issue) => {
+                          const getBorderClass = () => {
+                            switch (type) {
+                              case "critical": return "border-l-red-500"
+                              case "warning": return "border-l-yellow-500"
+                              case "info": return "border-l-blue-500"
+                              default: return "border-l-gray-300"
+                            }
+                          }
+
+                          const getBadgeClass = () => {
+                            switch (type) {
+                              case "critical": return "bg-red-50 text-red-700 border-red-200"
+                              case "warning": return "bg-yellow-50 text-yellow-700 border-yellow-200"
+                              case "info": return "bg-blue-50 text-blue-700 border-blue-200"
+                              default: return "bg-gray-50 text-gray-700 border-gray-200"
+                            }
+                          }
+
+                          return (
+                            <div
+                              key={issue.id}
+                              className={`border-l-4 ${getBorderClass()} rounded-lg border border-border/60 bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow`}
+                            >
+                              {/* 顶部标签栏 */}
+                              <div className="flex items-center justify-between gap-2 px-3 py-1.5 bg-muted/40 border-b border-border/50">
+                                <Badge variant="outline" className={`text-xs ${getBadgeClass()}`}>
+                                  {meta.title}
+                                </Badge>
+                                <Badge variant="outline" className="text-xs">
+                                  {issue.category}
+                                </Badge>
                               </div>
-                              <Badge variant="outline" className="text-xs shrink-0">
-                                {issue.category}
-                              </Badge>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                              <span className="px-2 py-0.5 rounded bg-background/80 border border-border/50">
-                                位置：{issue.location}
-                              </span>
-                            </div>
-                            {issue.suggestion && (
-                              <div className={cn("flex items-start gap-2 rounded-lg border border-secondary/40 bg-secondary/20 p-2", type === "critical" && "border-destructive/40 bg-destructive/10") }>
-                                <Lightbulb className="h-3 w-3 text-secondary mt-0.5" />
-                                <p className="text-xs text-secondary-foreground leading-relaxed">{issue.suggestion}</p>
+
+                              {/* 内容区域 */}
+                              <div className="p-3 space-y-2">
+                                {/* 问题标题 */}
+                                <h5 className="text-sm font-semibold text-foreground leading-relaxed">
+                                  {issue.title}
+                                </h5>
+
+                                {/* 问题描述 */}
+                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                  {issue.description}
+                                </p>
+
+                                {/* 建议框 */}
+                                {issue.suggestion && (
+                                  <div className="rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-2">
+                                    <div className="flex items-start gap-1.5">
+                                      <Lightbulb className="h-3.5 w-3.5 text-amber-600 dark:text-amber-500 mt-0.5 shrink-0" />
+                                      <div className="flex-1">
+                                        <p className="text-xs font-medium text-amber-900 dark:text-amber-100 mb-0.5">
+                                          修改建议
+                                        </p>
+                                        <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+                                          {issue.suggestion}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* 位置信息 */}
+                                <div className="text-xs text-muted-foreground pt-1.5 border-t border-border/40">
+                                  📍 {issue.location}
+                                </div>
                               </div>
-                            )}
-                          </div>
-                        ))}
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   )
