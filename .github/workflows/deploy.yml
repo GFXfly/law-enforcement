@@ -1,47 +1,50 @@
-name: Deploy to ECS
+name: Deploy to Server
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main  # 监控 `main` 分支的推送
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # 使用 Ubuntu 环境
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      # Step 1: Check out the code from GitHub repository
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-      - name: Add SSH key
-        uses: webfactory/ssh-agent@v0.9.0
+      # Step 2: Set up Node.js environment (适用于 Node.js 应用)
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
         with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          node-version: '14'  # 配置 Node.js 版本
 
-      - name: Rsync code to ECS (skip heavy folders)
-        run: |
-          rsync -az --delete \
-            --exclude '.git' \
-            --exclude 'node_modules' \
-            --exclude '.next' \
-            -e "ssh -p ${{ secrets.ECS_PORT }} -o StrictHostKeyChecking=no" \
-            ./ ${{ secrets.ECS_USER }}@${{ secrets.ECS_HOST }}:${{ secrets.ECS_PATH }}/
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: npm install
 
-      - name: Install deps + build + restart pm2
-        uses: appleboy/ssh-action@v1.0.3
+      # Step 4: Run tests (可选)
+      - name: Run tests
+        run: npm test
+
+      # Step 5: Build the application (构建应用)
+      - name: Build the application
+        run: npm run build
+
+      # Step 6: Deploy to your server (使用 SSH 部署)
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v0.1.0
         with:
-          host: ${{ secrets.ECS_HOST }}
-          username: ${{ secrets.ECS_USER }}
-          port: ${{ secrets.ECS_PORT }}
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: 22
           script: |
-            set -e
-            export PATH=$PATH:/usr/local/bin:/usr/bin
-            mkdir -p "${{ secrets.ECS_PATH }}"
-            cd "${{ secrets.ECS_PATH }}"
-            echo "PWD=$(pwd)"
-            echo "node=$(node -v || true)  npm=$(npm -v || true)  pm2=$(pm2 -v || true)"
-            npm install --registry=https://registry.npmmirror.com
-            npm run build
-            if pm2 describe law-enforcement >/dev/null 2>&1; then
-              pm2 restart law-enforcement
+            cd /path/to/your/application
+            git pull origin main  # 拉取最新代码
+            npm install  # 安装依赖
+            pm2 restart app-name  # 使用 pm2 重启应用（如果是使用 pm2 管理的）
             else
               pm2 start npm --name law-enforcement -- start
             fi
