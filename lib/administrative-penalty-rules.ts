@@ -156,16 +156,6 @@ function isUnitParty(text: string): boolean {
   return UNIT_KEYWORDS_REGEX.test(text)
 }
 
-function getPartySection(text: string): string {
-  const match = text.match(/(当事人|被处罚人)[：:][\s\S]{0,400}/)
-  if (!match) {
-    return text.slice(0, 400)
-  }
-  const section = match[0]
-  const segments = section.split(/\n{2,}/)
-  return segments[0]
-}
-
 interface RemedyAnalysis {
   review: {
     present: boolean
@@ -640,55 +630,76 @@ const MAIN_CONTENT_RULES: PenaltyReviewRule[] = [
     checkFunction: (content) => {
       const issues: ReviewIssue[] = []
       const text = content.text
-      const partySection = getPartySection(text)
 
-      // 只有当当事人字段存在但内容明显不足时才报错
+      // 扩大提取范围，提取前1000字符作为当事人信息区域
+      const partySection = text.slice(0, Math.min(1000, text.length))
+
+      // 检查是否有当事人关键词
       const hasPartyKeyword = /(当事人|被处罚人)[：:]/.test(partySection)
-      if (hasPartyKeyword && !/(当事人|被处罚人)[：:].{2,}/.test(partySection)) {
+      if (!hasPartyKeyword) {
+        issues.push({
+          problem: '未明确列示当事人信息',
+          location: '文书开头',
+          solution: '补充"当事人："或"被处罚人："及完整信息',
+          severity: 'critical'
+        })
+        return issues
+      }
+
+      // 检查姓名/名称（当事人后应该有内容）
+      if (!/(当事人|被处罚人)[：:]\s*.{2,}/.test(partySection)) {
         issues.push({
           problem: '未明确列示当事人姓名或名称',
           location: '当事人基本信息段',
-          solution: '补充"当事人："或"被处罚人："及完整姓名/单位名称',
+          solution: '补充"当事人："或"被处罚人："后的完整姓名/单位名称',
           severity: 'critical'
         })
       }
 
-      // 扩展地址识别模式，减少误报
-      const addressRegex = /(住所|住址|地址|经营场所|经营地址|注册地址|通讯地址)(（[^）]*）)?\s*[：:].{3,}/
+      // 优化地址检查：更宽松的匹配模式
+      const hasAddress =
+        /(住所|住址|地址|经营场所|经营地址|注册地址|通讯地址|联系地址)[\s（(]*[^：:]*[）)]*\s*[：:]\s*.{5,}/.test(partySection) ||
+        /地址[：:].{5,}/.test(partySection) ||
+        /[省市区县镇乡村街道路号室]\d/.test(partySection) // 检测是否有地址格式
 
-      if (hasPartyKeyword && !addressRegex.test(partySection)) {
+      if (!hasAddress) {
         issues.push({
           problem: '当事人地址或经营场所信息缺失',
           location: '当事人基本信息段',
-          solution: '补充详细地址或经营场所信息，确保可送达',
-          severity: 'warning'  // 降低严重程度
+          solution: '补充详细地址或经营场所信息（如"住所：××省××市××区××路××号"），确保可送达',
+          severity: 'warning'
         })
       }
 
-      const hasCompany = isUnitParty(partySection)
-      // 扩展身份证号匹配，支持空格和其他格式
-      const idRegex = /(身份证|居民身份证|身份证号|身份证号码|公民身份号码|证件号|证件号码)[^\n]{0,15}[：:]\s*[0-9X]{15,18}/i
-      const creditRegex = /(统一社会信用代码|社会信用代码|信用代码|组织机构代码|营业执照号|注册号)[^\n]{0,15}[：:]\s*[0-9A-Z\-]{8,}/
+      // 判断当事人类型（优先检查全文，避免误判）
+      const hasCompany = isUnitParty(text)
+
+      // 优化身份证号检查：支持空格、换行等格式
+      const idRegex = /(身份证|居民身份证|身份证号|身份证号码|公民身份号码|证件号|证件号码)[\s（(]*[^：:]*[）)]*\s*[：:]\s*[0-9X\s]{15,20}/i
+      const creditRegex = /(统一社会信用代码|社会信用代码|信用代码|组织机构代码|营业执照号|注册号)[\s（(]*[^：:]*[）)]*\s*[：:]\s*[0-9A-Z\-\s]{8,}/i
 
       const hasIdInfo = idRegex.test(partySection)
       const hasCreditInfo = creditRegex.test(partySection)
 
-      if (hasCompany && hasPartyKeyword) {
+      // 单位当事人
+      if (hasCompany) {
         if (!hasCreditInfo) {
           issues.push({
             problem: '单位当事人未提供统一社会信用代码或组织机构代码',
             location: '当事人基本信息段',
-            solution: '补充单位统一社会信用代码、组织机构代码等主体身份信息',
-            severity: 'warning'  // 降低严重程度
+            solution: '补充单位统一社会信用代码、组织机构代码等主体身份信息（如"统一社会信用代码：91330000XXXXXXXXXX"）',
+            severity: 'warning'
           })
         }
-      } else if (!hasCompany && hasPartyKeyword) {
+      }
+      // 个人当事人
+      else {
         if (!hasIdInfo) {
           issues.push({
             problem: '个人当事人未提供身份证号码或有效证件号码',
             location: '当事人基本信息段',
-            solution: '补充个人身份证号码或其他有效身份证明信息',
-            severity: 'warning'  // 降低严重程度
+            solution: '补充个人身份证号码或其他有效身份证明信息（如"身份证号码：330XXXXXXXXXXXXXXXXX"）',
+            severity: 'warning'
           })
         }
       }
@@ -705,14 +716,16 @@ const MAIN_CONTENT_RULES: PenaltyReviewRule[] = [
     checkFunction: (content) => {
       const issues: ReviewIssue[] = []
 
-      const partySection = getPartySection(content.text)
+      const text = content.text
+      // 扩大检查范围，前1000字符
+      const partySection = text.slice(0, Math.min(1000, text.length))
 
-      if (isUnitParty(partySection)) {
-        if (!/(法定代表人|主要负责人|负责人)/.test(partySection)) {
+      if (isUnitParty(text)) {
+        if (!/(法定代表人|主要负责人|负责人|经理)[：:].{1,}/.test(partySection)) {
           issues.push({
             problem: '单位当事人未注明法定代表人或负责人',
             location: '当事人信息段',
-            solution: '为单位当事人补充“法定代表人/负责人：××”等信息',
+            solution: '为单位当事人补充"法定代表人/负责人：××"等信息',
             severity: 'warning'
           })
         }

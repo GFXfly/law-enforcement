@@ -268,7 +268,18 @@ function buildAnalysisPrompt(content: DocumentContent, structure: DocumentStruct
 4. 给出的建议必须具体可操作${strictModeNote}
 
 **重点关注**：
-- 必备要素：当事人信息、违法事实、证据、法律依据、处罚决定、救济告知是否完整
+- 必备要素完整性：
+  * 当事人信息(根据"当事人:"后的名称自动判断类型)：
+    - 判断规则：如果是人名则为个人,如果包含"公司、企业、商店、厂、中心、合作社、个体工商户"等则为单位
+    - 个人当事人必需信息：姓名、住所(住址)、身份证号、联系电话
+    - 单位当事人必需信息：名称、住所(住址)、统一社会信用代码、单位负责人信息(姓名、身份证号、联系方式)
+    - 注意："法定代表人(负责人、经营者)"是正确表述,括号内是不同类型单位的不同称呼(公司用"法定代表人",个体户用"负责人"或"经营者"),不要报告此类格式问题
+    - 不要报告"类型认定不清",而应根据判断结果直接指出缺失的具体信息要素
+  * 违法事实、证据、法律依据、处罚决定、救济告知是否完整
+- 格式规范性：
+  * 信息字段不应有多余空格(如"统一社会信用代码 : 123"应为"统一社会信用代码:123")
+  * 空白字段应删除(如"其他联系方式:"后无内容应删除整行)
+  * 标点符号使用规范
 - 逻辑一致性：事实、证据、法律依据、处罚决定之间是否对应，前后是否矛盾
 - 法律准确性：引用的法律条款是否准确，处罚幅度是否合理
 - 程序规范性：陈述申辩、听证、复议诉讼告知等程序是否齐全
@@ -332,7 +343,8 @@ export async function performAIAnalysis(
     console.log('[AI Analysis] API Key已配置，准备调用DeepSeek API...')
 
     const requestBody = {
-      model: 'deepseek-chat',  // 使用chat模型而非reasoner，更适合文档审查
+      model: DEEPSEEK_MODEL_ID,
+      ...(DEEPSEEK_MODEL_VERSION ? { model_version: DEEPSEEK_MODEL_VERSION } : {}),
       messages: [
         {
           role: 'system',
@@ -449,7 +461,8 @@ export async function performRuleValidation(
 
   try {
     const requestBody = {
-      model: 'deepseek-chat',
+      model: DEEPSEEK_MODEL_ID,
+      ...(DEEPSEEK_MODEL_VERSION ? { model_version: DEEPSEEK_MODEL_VERSION } : {}),
       messages: [
         {
           role: 'system',

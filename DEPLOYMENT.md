@@ -329,7 +329,7 @@ grep DEEPSEEK_API_KEY .env
 curl -X POST https://api.deepseek.com/v1/chat/completions \
   -H "Authorization: Bearer your_api_key" \
   -H "Content-Type: application/json" \
-  -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"test"}]}'
+  -d '{"model":"deepseek-reasoner","model_version":"v3.2","messages":[{"role":"user","content":"test"}]}'
 ```
 
 ## 🔐 安全建议
