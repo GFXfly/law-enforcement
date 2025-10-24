@@ -95,6 +95,132 @@ const INDENTATION_REGEX = /^[\u3000\u00A0\u2000-\u200B\s]{2,}/
 const MULTIPLE_SPACE_PATTERN = /[\u3000\u00A0\u2000-\u200B\s]{2,}/g
 const LABEL_PREFIX_REGEX = /^[\u4e00-\u9fa5（）()]{1,20}[：:]/
 
+/**
+ * 提取罚款金额（元）
+ * 支持多种格式：罚款300元、处罚款人民币300元、罚款3000.00元等
+ */
+function extractFineAmount(text: string): number | null {
+  const normalized = normalizeText(text)
+
+  // 匹配各种罚款表述
+  const patterns = [
+    /(?:罚款|处罚款|处以罚款|并处罚款|罚金)(?:人民币)?[^\d]*?(\d+(?:[,，]\d{3})*(?:\.\d{1,2})?)\s*元/g,
+    /(?:罚款|处罚款|处以罚款|并处罚款|罚金)[^\d]*?(\d+(?:[,，]\d{3})*(?:\.\d{1,2})?)[^\d]*?(?:元|圆)/g,
+  ]
+
+  let maxAmount = 0
+  let found = false
+
+  for (const pattern of patterns) {
+    let match
+    while ((match = pattern.exec(normalized)) !== null) {
+      const amountStr = match[1].replace(/[,，]/g, '')
+      const amount = parseFloat(amountStr)
+      if (!isNaN(amount) && amount > maxAmount) {
+        maxAmount = amount
+        found = true
+      }
+    }
+  }
+
+  return found ? maxAmount : null
+}
+
+/**
+ * 判断当事人类型
+ */
+function getPartyType(content: DocumentContent): 'individual' | 'unit' | 'unknown' {
+  const text = content.text
+  const normalized = normalizeText(text)
+
+  // 查找当事人部分
+  const partyMatch = normalized.match(/当事人[：:]([\s\S]{0,200})/)
+  if (!partyMatch) return 'unknown'
+
+  const partySection = partyMatch[1]
+
+  // 如果包含单位关键词，判定为单位
+  if (UNIT_KEYWORDS_REGEX.test(partySection)) {
+    return 'unit'
+  }
+
+  // 如果包含身份证号但不包含法定代表人/负责人，判定为个人
+  if (/身份证(?:号码?|号|证号)[：:]?\d{15,18}/.test(partySection) &&
+      !/法定代表人|负责人|经营者/.test(partySection)) {
+    return 'individual'
+  }
+
+  // 默认返回未知
+  return 'unknown'
+}
+
+/**
+ * 检查是否需要听证权利告知
+ */
+function checkHearingRightRequired(content: DocumentContent): {
+  required: boolean
+  partyType: 'individual' | 'unit' | 'unknown'
+  fineAmount: number | null
+  threshold: number | null
+  reason: string
+} {
+  const partyType = getPartyType(content)
+  const fineAmount = extractFineAmount(content.text)
+
+  if (!fineAmount) {
+    return {
+      required: false,
+      partyType,
+      fineAmount: null,
+      threshold: null,
+      reason: '未检测到明确的罚款金额'
+    }
+  }
+
+  // 个人：1万元以上需要听证
+  if (partyType === 'individual') {
+    const threshold = 10000
+    const required = fineAmount >= threshold
+    return {
+      required,
+      partyType,
+      fineAmount,
+      threshold,
+      reason: required
+        ? `个人罚款${fineAmount}元，达到${threshold}元听证标准`
+        : `个人罚款${fineAmount}元，未达到${threshold}元听证标准`
+    }
+  }
+
+  // 单位：10万元以上需要听证
+  if (partyType === 'unit') {
+    const threshold = 100000
+    const required = fineAmount >= threshold
+    return {
+      required,
+      partyType,
+      fineAmount,
+      threshold,
+      reason: required
+        ? `单位罚款${fineAmount}元，达到${threshold}元听证标准`
+        : `单位罚款${fineAmount}元，未达到${threshold}元听证标准`
+    }
+  }
+
+  // 类型未知时，使用保守策略（较低标准）
+  const threshold = 10000
+  const required = fineAmount >= threshold
+  return {
+    required,
+    partyType,
+    fineAmount,
+    threshold,
+    reason: required
+      ? `罚款${fineAmount}元，当事人类型未明确识别，建议按个人标准${threshold}元进行听证告知`
+      : `罚款${fineAmount}元，未达到最低听证标准${threshold}元`
+  }
+}
+
 function formatSpaceIssue(paragraph: string, match: RegExpMatchArray, index: number): string {
   const start = match.index ?? 0
   const beforeChar = start > 0 ? paragraph[start - 1] : '段首'
@@ -948,18 +1074,41 @@ const FULFILLMENT_AND_RIGHTS_RULES: PenaltyReviewRule[] = [
         issues.push({
           problem: '未见陈述申辩权利的告知记录',
           location: '权利告知部分',
-          solution: '补充表述“你单位已享有陈述申辩权利”或说明是否放弃',
+          solution: '补充表述"你单位已享有陈述申辩权利"或说明是否放弃',
           severity: 'warning'
         })
       }
 
-      if (HEARING_TRIGGER_AMOUNT.test(text) && !/(听证|听证权)/.test(text)) {
-        issues.push({
-          problem: '涉及较大罚款但未告知听证权利',
-          location: '权利告知部分',
-          solution: '对于较大罚款或责令停产停业等，应告知当事人听证权利及期限',
-          severity: 'warning'
-        })
+      // 使用新的听证权利检查函数
+      const hearingCheck = checkHearingRightRequired(content)
+
+      if (hearingCheck.required) {
+        const hasHearingNotice = /(听证|听证权)/.test(text)
+
+        if (!hasHearingNotice) {
+          const partyTypeText = hearingCheck.partyType === 'individual' ? '个人' :
+                                hearingCheck.partyType === 'unit' ? '单位' : '当事人'
+
+          issues.push({
+            problem: `${partyTypeText}罚款${hearingCheck.fineAmount}元，达到听证标准（${hearingCheck.threshold}元），但未告知听证权利`,
+            location: '权利告知部分',
+            solution: `根据《行政处罚法》规定，${hearingCheck.reason}，应告知当事人享有听证权利，并说明应在收到行政处罚事先告知书之日起三日内提出听证申请`,
+            severity: 'critical'
+          })
+        } else {
+          // 检查是否明确告知了听证申请期限
+          const hasDeadline = /(?:收到.*?告知.*?之日起|自收到.*?告知.*?之日起).*?(?:三|3).*?(?:日|天).*?(?:内|之内).*?(?:提出|申请).*?听证/.test(text) ||
+                             /(?:提出|申请).*?听证.*?(?:收到.*?告知.*?之日起|自收到.*?告知.*?之日起).*?(?:三|3).*?(?:日|天)/.test(text)
+
+          if (!hasDeadline) {
+            issues.push({
+              problem: '已告知听证权利，但未明确说明听证申请期限',
+              location: '听证权利告知部分',
+              solution: '应明确告知"当事人有权在收到本告知书之日起三日内向本机关提出听证申请"',
+              severity: 'warning'
+            })
+          }
+        }
       }
 
       return issues

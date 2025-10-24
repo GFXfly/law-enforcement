@@ -26,7 +26,16 @@ export interface AIAnalysisIssue {
   confidence?: number
 }
 
+export interface AIHearingRightCheck {
+  partyType: 'individual' | 'unit' | 'unknown'
+  fineAmount: number | null
+  hearingRequired: boolean
+  hearingNoticeFound: boolean
+  analysis: string
+}
+
 export interface AIAnalysisResult {
+  hearingRightCheck?: AIHearingRightCheck
   issues: AIAnalysisIssue[]
   summary: {
     totalIssues: number
@@ -283,6 +292,17 @@ function buildAnalysisPrompt(content: DocumentContent, structure: DocumentStruct
 - 逻辑一致性：事实、证据、法律依据、处罚决定之间是否对应，前后是否矛盾
 - 法律准确性：引用的法律条款是否准确，处罚幅度是否合理
 - 程序规范性：陈述申辩、听证、复议诉讼告知等程序是否齐全
+- **听证权利告知（重要）**：
+  * 根据《中华人民共和国行政处罚法》规定，需要告知听证权利的情形：
+    - 个人当事人：罚款金额达到或超过**1万元**时，必须告知听证权利
+    - 单位当事人（包括公司、企业、个体工商户等）：罚款金额达到或超过**10万元**时，必须告知听证权利
+    - 责令停产停业、吊销许可证或执照、较大数额罚款等情形
+  * 检查步骤：
+    1. 识别当事人类型（个人或单位）
+    2. 提取处罚决定中的罚款金额（需识别"罚款XX元"、"处罚款人民币XX元"等各种表述）
+    3. 判断是否达到听证标准：个人≥1万元，单位≥10万元
+    4. 如达到标准，检查是否明确告知了听证权利及申请期限（通常为收到告知书后3日内）
+  * 如果罚款金额达到听证标准但未告知听证权利，必须报告为严重问题（critical）
 
 **文书内容**：
 ${content.text}
@@ -291,6 +311,13 @@ ${content.text}
 
 \`\`\`json
 {
+  "hearingRightCheck": {
+    "partyType": "individual|unit|unknown",
+    "fineAmount": 10000,
+    "hearingRequired": true,
+    "hearingNoticeFound": false,
+    "analysis": "个人罚款10000元，达到听证标准，但文书中未发现听证权利告知"
+  },
   "issues": [
     {
       "type": "critical|warning|info",
@@ -310,7 +337,10 @@ ${content.text}
 }
 \`\`\`
 
-如果没有发现问题，issues数组可以为空。评分标准：90分以上优秀，80-89分良好，70-79分合格，70分以下需要改进。`
+**重要说明**：
+- hearingRightCheck 部分是必填项，必须根据文书内容准确填写
+- 如果没有发现其他问题，issues数组可以为空
+- 评分标准：90分以上优秀，80-89分良好，70-79分合格，70分以下需要改进`
 }
 
 /**
@@ -424,13 +454,13 @@ export async function performAIAnalysis(
 
   } catch (error) {
     console.error('[AI Analysis] Error calling DeepSeek API:', error)
-    console.error('[AI Analysis] 错误类型:', error?.constructor?.name)
-    console.error('[AI Analysis] 错误信息:', error?.message)
+    console.error('[AI Analysis] 错误类型:', (error as Error)?.constructor?.name)
+    console.error('[AI Analysis] 错误信息:', (error as Error)?.message)
 
     // 区分不同类型的错误
     if (error instanceof TypeError && error.message.includes('fetch')) {
       console.error('[AI Analysis] 网络连接错误')
-    } else if (error?.message?.includes('API error')) {
+    } else if (error instanceof Error && error.message?.includes('API error')) {
       console.error('[AI Analysis] API调用错误')
     } else {
       console.error('[AI Analysis] 未知错误')
@@ -530,6 +560,44 @@ function parseAIResponse(aiResponse: string): Omit<AIAnalysisResult, 'processing
 
     const parsed = JSON.parse(jsonPayload)
 
+    // 解析听证权利检查结果
+    let hearingRightCheck: AIHearingRightCheck | undefined
+    if (parsed.hearingRightCheck && typeof parsed.hearingRightCheck === 'object') {
+      const hrc = parsed.hearingRightCheck
+      hearingRightCheck = {
+        partyType: hrc.partyType === 'individual' || hrc.partyType === 'unit' ? hrc.partyType : 'unknown',
+        fineAmount: typeof hrc.fineAmount === 'number' ? hrc.fineAmount : null,
+        hearingRequired: Boolean(hrc.hearingRequired),
+        hearingNoticeFound: Boolean(hrc.hearingNoticeFound),
+        analysis: sanitizeChineseText(hrc.analysis || '未提供分析')
+      }
+
+      // 如果听证权利检查发现问题，自动添加到 issues 中
+      if (hearingRightCheck.hearingRequired && !hearingRightCheck.hearingNoticeFound && hearingRightCheck.fineAmount) {
+        const partyTypeText = hearingRightCheck.partyType === 'individual' ? '个人' :
+                              hearingRightCheck.partyType === 'unit' ? '单位' : '当事人'
+        const threshold = hearingRightCheck.partyType === 'individual' ? 10000 : 100000
+
+        // 检查是否已经有类似的 issue，避免重复
+        const hasExistingHearingIssue = (parsed.issues || []).some((issue: any) =>
+          issue.category === '履行与权利告知' && /听证/.test(issue.title || issue.description || '')
+        )
+
+        if (!hasExistingHearingIssue) {
+          parsed.issues = parsed.issues || []
+          parsed.issues.unshift({
+            type: 'critical',
+            category: '履行与权利告知',
+            title: '未告知听证权利',
+            description: `${partyTypeText}罚款${hearingRightCheck.fineAmount}元，达到听证标准（${threshold}元），但文书中未发现听证权利告知`,
+            location: '权利告知部分',
+            suggestion: `根据《行政处罚法》规定，应告知当事人享有听证权利，并说明应在收到行政处罚事先告知书之日起三日内提出听证申请`,
+            confidence: 95
+          })
+        }
+      }
+    }
+
     // 标准化issues
     const issues: AIAnalysisIssue[] = (parsed.issues || []).map((issue: any, index: number) =>
       sanitizeIssue({
@@ -545,6 +613,7 @@ function parseAIResponse(aiResponse: string): Omit<AIAnalysisResult, 'processing
     )
 
     return {
+      hearingRightCheck,
       issues,
       summary: {
         totalIssues: issues.length,
@@ -618,6 +687,7 @@ function parseNaturalLanguageResponse(text: string): Omit<AIAnalysisResult, 'pro
   const score = Math.max(60, baseScore - criticalCount * 10 - warningCount * 5)
 
   return {
+    hearingRightCheck: undefined,
     issues,
     summary: {
       totalIssues: issues.length,
@@ -664,6 +734,7 @@ function extractSimpleAnalysis(aiResponse: string): Omit<AIAnalysisResult, 'proc
  */
 function performFallbackAnalysis(_content: DocumentContent, _structure: DocumentStructure): AIAnalysisResult {
   return {
+    hearingRightCheck: undefined,
     issues: [],
     summary: {
       totalIssues: 0,
