@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { parseDocumentContent, analyzeDocumentStructure, validateDocumentType } from "@/lib/document-processor"
 import { performAIAnalysis, performRuleValidation, type AIAnalysisOptions, type RuleIssueForValidation } from "@/lib/ai-analysis-service"
-import { getAllReviewRules } from "@/lib/administrative-penalty-rules"
+import { ReviewIssue, PenaltyReviewRule, getAllReviewRules } from "@/lib/rules"
 import { storeProcessingResult, generateJobId } from "@/lib/storage"
 
 const AI_SEMANTIC_REVIEW_DISABLED = process.env.AI_SEMANTIC_REVIEW_DISABLED === "true"
@@ -39,14 +39,14 @@ export async function POST(request: NextRequest) {
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
-      console.log(`[Processing] Processing file: ${file.name}`)
+      console.log(`[Processing] Processing file: ${file.name} `)
 
       try {
         // Step 1: Document type validation
         console.log(`[Processing] Step 1: Validating document type for ${file.name}`)
 
         // Step 2: Extract document content
-        console.log(`[Processing] Step 2: Extracting content from ${file.name}`)
+        console.log(`[Processing] Step 2: Extracting content from ${file.name} `)
         const documentContent = await parseDocumentContent(file)
 
         // Step 3: Validate document type
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
         let discardedRuleIssueIds: string[] = []
 
         if (aiProcessingEnabled && validatedRuleIssues.length > 0) {
-          console.log(`[Processing] Step 5a: AI validation for rule issues of ${file.name}`)
+          console.log(`[Processing] Step 5a: AI validation for rule issues of ${file.name} `)
           const validationResult = await performRuleValidation(documentContent, validatedRuleIssues as RuleIssueForValidation[], {
             strictMode: options.strictMode || false
           })
@@ -95,18 +95,18 @@ export async function POST(request: NextRequest) {
         const aiAnalysisResults = aiProcessingEnabled
           ? await performAIAnalysis(documentContent, documentStructure, aiAnalysisOptions)
           : {
-              issues: [],
-              summary: {
-                totalIssues: 0,
-                languageScore: 90,
-                logicScore: 90,
-                overallAssessment: 'AI语义审查暂未启用',
-              },
-              processingDetails: {
-                modelUsed: 'disabled',
-                processingTime: 0,
-              },
-            }
+            issues: [],
+            summary: {
+              totalIssues: 0,
+              languageScore: 90,
+              logicScore: 90,
+              overallAssessment: 'AI语义审查暂未启用',
+            },
+            processingDetails: {
+              modelUsed: 'disabled',
+              processingTime: 0,
+            },
+          }
 
         if (!aiProcessingEnabled) {
           console.log('[Processing] AI语义审查已暂时停用，本次仅执行规则审查')
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
         score = Math.max(score, 40) // 保持底分以反映基础完成度
 
         processedFiles.push({
-          id: `file_${i + 1}`,
+          id: `file_${i + 1} `,
           name: file.name,
           size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
           status: score >= 85 ? "success" : score >= 70 ? "warning" : "error",
@@ -145,22 +145,22 @@ export async function POST(request: NextRequest) {
           }
         })
 
-        console.log(`[Processing] Completed processing ${file.name}: ${allIssues.length} issues found, score: ${score}`)
+        console.log(`[Processing] Completed processing ${file.name}: ${allIssues.length} issues found, score: ${score} `)
 
       } catch (error) {
-        console.error(`[Processing] Error processing file ${file.name}:`, error)
+        console.error(`[Processing] Error processing file ${file.name}: `, error)
         processedFiles.push({
-          id: `file_${i + 1}`,
+          id: `file_${i + 1} `,
           name: file.name,
           size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
           status: "error",
           score: 0,
           issues: [{
-            id: `error_${i + 1}`,
+            id: `error_${i + 1} `,
             type: "critical" as const,
             category: "处理错误",
             title: "文档处理失败",
-            description: `处理文档时发生错误: ${error instanceof Error ? error.message : '未知错误'}`,
+            description: `处理文档时发生错误: ${error instanceof Error ? error.message : '未知错误'} `,
             location: "整个文档",
             suggestion: "请检查文档格式是否正确，或重新上传文档"
           }],
@@ -249,7 +249,7 @@ async function performRuleChecks(content: any, structure: any, _options: Process
 
       result.forEach((reviewIssue, issueIndex) => {
         issues.push({
-          id: `${rule.id}_${issueIndex + 1}`,
+          id: `${rule.id}_${issueIndex + 1} `,
           type: reviewIssue.severity,
           category: rule.category,
           title: rule.name,

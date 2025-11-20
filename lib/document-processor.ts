@@ -1,5 +1,5 @@
 import mammoth from "mammoth"
-import { getAllReviewRules, getRulesBySeverity } from './administrative-penalty-rules'
+import { getAllReviewRules, ReviewIssue, PenaltyReviewRule } from './rules'
 import { parseWordFormat, type DocumentFormatInfo, type ParagraphFormat } from './word-format-parser'
 
 export interface DocumentContent {
@@ -112,7 +112,7 @@ export async function parseDocumentContent(file: File): Promise<DocumentContent>
     }
   } catch (error) {
     console.error('文档解析失败:', error)
-    throw new Error(`文档解析失败: ${error instanceof Error ? error.message : '未知错误'}`)
+    throw new Error(`文档解析失败: ${error instanceof Error ? error.message : '未知错误'} `)
   }
 }
 
@@ -136,7 +136,7 @@ export function analyzeDocumentStructure(content: DocumentContent): DocumentStru
     ]
 
     return titlePatterns.some(pattern => pattern.test(text)) ||
-           (text.length < 50 && text.length > 5 && !text.includes('。'))
+      (text.length < 50 && text.length > 5 && !text.includes('。'))
   }
 
   // 检测章节标题
@@ -167,7 +167,7 @@ export function analyzeDocumentStructure(content: DocumentContent): DocumentStru
   if (secondLine) titleLines.push(secondLine)
 
   if (firstLine && secondLine && /行政处罚决定书/.test(secondLine)) {
-    title = `${firstLine}${secondLine}`
+    title = `${firstLine}${secondLine} `
   }
 
   // 提取章节结构
@@ -227,7 +227,7 @@ export function analyzeDocumentStructure(content: DocumentContent): DocumentStru
     if (rows.length > 0) {
       tables.push({
         rows,
-        location: `表格${index + 1}`
+        location: `表格${index + 1} `
       })
     }
   })
@@ -244,7 +244,7 @@ export function analyzeDocumentStructure(content: DocumentContent): DocumentStru
       lists.push({
         items,
         type: isOrdered ? 'ordered' : 'unordered',
-        location: `列表${index + 1}`
+        location: `列表${index + 1} `
       })
     }
   })
@@ -413,7 +413,7 @@ export function validateDocumentDetailed(content: DocumentContent, structure: Do
           categoryScore -= deductionMap[rule.severity] * result.length
         }
       } catch (error) {
-        console.error(`规则检查失败 [${rule.id}]:`, error)
+        console.error(`规则检查失败[${rule.id}]: `, error)
         // 规则检查失败时不影响整体流程
       }
     })
@@ -441,13 +441,13 @@ export function validateDocumentDetailed(content: DocumentContent, structure: Do
   // 生成原因说明
   const reasons: string[] = []
   if (criticalIssues > 0) {
-    reasons.push(`发现${criticalIssues}个严重问题，涉及法定要素缺失`)
+    reasons.push(`发现${criticalIssues} 个严重问题，涉及法定要素缺失`)
   }
   if (warningIssues > 0) {
-    reasons.push(`发现${warningIssues}个警告问题，需要规范改进`)
+    reasons.push(`发现${warningIssues} 个警告问题，需要规范改进`)
   }
   if (infoIssues > 0) {
-    reasons.push(`发现${infoIssues}个提示问题，建议优化`)
+    reasons.push(`发现${infoIssues} 个提示问题，建议优化`)
   }
 
   // 判定是否有效（严格标准：无严重问题且总评分>=70）

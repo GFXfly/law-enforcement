@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { useDropzone } from "react-dropzone"
-import { Upload, FileText, X, AlertCircle, CheckCircle2, Loader2, Play } from "lucide-react"
+import { Upload, FileText, X, AlertCircle, CheckCircle2, Loader2, Play, FileUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -139,29 +139,43 @@ export function FileUploadSection() {
     open()
   }
 
-  const interactiveButtonClasses = "transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg focus-visible:shadow-lg"
-
   const renderUploadContent = () => {
     if (uploadedFile && uploadedFile.status === "success") {
       return (
-        <div className="text-center">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 border-2 border-green-200">
-            <CheckCircle2 className="h-8 w-8 text-green-600" />
+        <div className="text-center animate-fade-in-up">
+          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-green-50 border border-green-100 shadow-sm">
+            <CheckCircle2 className="h-10 w-10 text-green-500" />
           </div>
-          <h3 className="text-2xl font-semibold text-foreground mb-3">上传成功</h3>
-          <div className="bg-secondary rounded-lg p-4 mb-6 max-w-md mx-auto">
-            <div className="flex items-center gap-3 justify-center">
+          <h3 className="text-2xl font-semibold text-foreground mb-2">上传成功</h3>
+          <p className="text-base text-muted-foreground mb-6">文件已准备就绪</p>
+
+          <div className="bg-white border border-border rounded-xl p-4 mb-8 max-w-md mx-auto shadow-sm flex items-center gap-4 text-left">
+            <div className="h-10 w-10 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
               <FileText className="h-5 w-5 text-primary" />
-              <span className="text-base font-medium text-foreground truncate">{uploadedFile.file.name}</span>
             </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground truncate">{uploadedFile.file.name}</p>
+              <p className="text-xs text-muted-foreground">{(uploadedFile.file.size / 1024).toFixed(1)} KB</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation()
+                removeFile()
+              }}
+              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
+
           <div className="flex justify-center gap-4">
             <Button
               variant="outline"
               onClick={removeFile}
-              className={interactiveButtonClasses}
+              className="h-11 px-6"
             >
-              <X className="mr-2 h-4 w-4" />
               重新上传
             </Button>
             <Button
@@ -171,7 +185,7 @@ export function FileUploadSection() {
                 processFiles()
               }}
               disabled={isProcessing}
-              className={interactiveButtonClasses}
+              className="h-11 px-8 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all hover:-translate-y-0.5"
             >
               {isProcessing ? (
                 <>
@@ -180,7 +194,7 @@ export function FileUploadSection() {
                 </>
               ) : (
                 <>
-                  <Play className="mr-2 h-4 w-4" />
+                  <Play className="mr-2 h-4 w-4 fill-current" />
                   开始审查
                 </>
               )}
@@ -192,37 +206,44 @@ export function FileUploadSection() {
 
     // Default upload state
     return (
-      <>
-        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 border-2 border-primary/20">
-          <Upload className="h-8 w-8 text-primary" />
+      <div className="animate-fade-in">
+        <div className={cn(
+          "mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full transition-all duration-300",
+          isDragActive ? "bg-primary/10 scale-110" : "bg-secondary/50 group-hover:bg-secondary"
+        )}>
+          {isDragActive ? (
+            <FileUp className="h-8 w-8 text-primary animate-bounce" />
+          ) : (
+            <Upload className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
+          )}
         </div>
 
-        <h3 className="text-2xl font-semibold text-foreground mb-3">
-          {isDragActive ? "释放文件到此处" : "拖放 DOCX 文档到此区域"}
+        <h3 className="text-lg font-semibold text-foreground mb-2">
+          {isDragActive ? "释放文件以上传" : "点击或拖拽上传文书"}
         </h3>
-        <p className="text-sm text-muted-foreground mb-8">
-          支持 DOCX 格式，最大 10MB
+        <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">
+          支持 .docx 格式，大小不超过 10MB
         </p>
 
-        <div className="flex justify-center gap-4">
+        <div className="flex justify-center">
           <Button
-            size="default"
+            size="lg"
             variant="outline"
             onClick={handleFileSelect}
-            className={interactiveButtonClasses}
+            className="h-11 px-8 border-primary/20 text-primary hover:bg-primary/5 hover:text-primary hover:border-primary/30 transition-all"
           >
             <FileText className="mr-2 h-5 w-5" />
             选择文件
           </Button>
         </div>
-      </>
+      </div>
     )
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 w-full max-w-2xl mx-auto">
       {uploadError && (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="animate-fade-in-up">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription className="font-medium">{uploadError}</AlertDescription>
         </Alert>
@@ -230,20 +251,18 @@ export function FileUploadSection() {
 
       <Card
         className={cn(
-          "group transform border-2 border-dashed rounded-xl bg-background/40 transition-all duration-300 ease-out will-change-transform",
+          "group relative overflow-hidden border-2 border-dashed rounded-2xl transition-all duration-300 ease-out",
           isDragActive
-            ? "border-primary bg-primary/10 shadow-lg"
-            : "border-border/80 hover:border-primary/60 hover:shadow-xl hover:-translate-y-1",
+            ? "border-primary bg-primary/5 shadow-lg scale-[1.01]"
+            : "border-border hover:border-primary/40 hover:bg-secondary/30 hover:shadow-md",
+          uploadedFile?.status === "success" ? "bg-white/50 border-transparent shadow-xl ring-1 ring-black/5" : ""
         )}
       >
-
         <div
           {...getRootProps()}
           className={cn(
-            "relative cursor-pointer text-center p-12 transition-all duration-300 ease-out",
-            isDragActive
-              ? "scale-[1.02]"
-              : "group-hover:scale-[1.015] group-hover:bg-primary/5 group-hover:shadow-inner",
+            "relative cursor-pointer text-center p-10 sm:p-14 transition-all duration-300",
+            isDragActive ? "bg-transparent" : ""
           )}
         >
           <input {...getInputProps()} />

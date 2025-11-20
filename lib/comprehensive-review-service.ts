@@ -5,7 +5,7 @@
 
 import { DocumentContent, DocumentStructure, validateDocumentDetailed, DetailedValidationResult } from './document-processor'
 import { performAIAnalysis, AIAnalysisResult, AIAnalysisOptions } from './ai-analysis-service'
-import { getAllReviewRules, getRulesByCategory, getRulesBySeverity } from './administrative-penalty-rules'
+import { getAllReviewRules, getRulesByCategory, getRulesBySeverity } from './rules'
 
 const AI_SEMANTIC_REVIEW_DISABLED = process.env.AI_SEMANTIC_REVIEW_DISABLED === 'true'
 
@@ -347,16 +347,14 @@ export function generateReviewSummary(result: ComprehensiveReviewResult): string
   summary += `- 警告问题：${statistics.warningIssues}个\n`
   summary += `- 提示信息：${statistics.infoIssues}个\n\n`
 
-  summary += `合规状态：${
-    recommendations.complianceStatus === 'compliant' ? '符合要求' :
-    recommendations.complianceStatus === 'needs_improvement' ? '需要改进' : '不符合要求'
-  }\n`
+  summary += `合规状态：${recommendations.complianceStatus === 'compliant' ? '符合要求' :
+      recommendations.complianceStatus === 'needs_improvement' ? '需要改进' : '不符合要求'
+    }\n`
 
-  summary += `风险等级：${
-    recommendations.riskLevel === 'low' ? '低风险' :
-    recommendations.riskLevel === 'medium' ? '中等风险' :
-    recommendations.riskLevel === 'high' ? '高风险' : '严重风险'
-  }\n\n`
+  summary += `风险等级：${recommendations.riskLevel === 'low' ? '低风险' :
+      recommendations.riskLevel === 'medium' ? '中等风险' :
+        recommendations.riskLevel === 'high' ? '高风险' : '严重风险'
+    }\n\n`
 
   summary += `主要建议：\n`
   recommendations.actions.forEach((action, index) => {

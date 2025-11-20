@@ -1,5 +1,5 @@
 import { DocumentContent, DocumentStructure } from './document-processor'
-import { getAllReviewRules } from './administrative-penalty-rules'
+import { ReviewIssue, PenaltyReviewRule } from './rules'
 
 const DEEPSEEK_CHAT_COMPLETION_URL = process.env.DEEPSEEK_API_URL?.trim() || 'https://api.deepseek.com/chat/completions'
 const DEEPSEEK_MODEL_ID = process.env.DEEPSEEK_MODEL?.trim() || 'deepseek-reasoner'
@@ -575,7 +575,7 @@ function parseAIResponse(aiResponse: string): Omit<AIAnalysisResult, 'processing
       // 如果听证权利检查发现问题，自动添加到 issues 中
       if (hearingRightCheck.hearingRequired && !hearingRightCheck.hearingNoticeFound && hearingRightCheck.fineAmount) {
         const partyTypeText = hearingRightCheck.partyType === 'individual' ? '个人' :
-                              hearingRightCheck.partyType === 'unit' ? '单位' : '当事人'
+          hearingRightCheck.partyType === 'unit' ? '单位' : '当事人'
         const threshold = hearingRightCheck.partyType === 'individual' ? 10000 : 100000
 
         // 检查是否已经有类似的 issue，避免重复

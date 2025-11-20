@@ -194,14 +194,12 @@ export default function ResultsPageClient() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-background flex flex-col">
         <Header />
-        <main className="container mx-auto px-4 py-8">
-          <div className="flex items-center justify-center py-20">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-muted-foreground">正在加载审查结果...</p>
-            </div>
+        <main className="flex-1 container mx-auto px-6 py-20 flex items-center justify-center">
+          <div className="text-center animate-pulse">
+            <div className="h-12 w-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-6"></div>
+            <p className="text-lg text-muted-foreground font-medium">正在生成审查报告...</p>
           </div>
         </main>
       </div>
@@ -209,15 +207,23 @@ export default function ResultsPageClient() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Header />
-      <main className="container mx-auto px-4 py-8">
-        <div className="space-y-10">
-          <div className="flex flex-col items-center text-center gap-4">
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-bold text-foreground">审查结果</h1>
-              <p className="text-sm sm:text-base text-muted-foreground mt-2">{results.timestamp}</p>
+
+      <main className="flex-1 container mx-auto max-w-[1200px] px-6 py-12 relative">
+        {/* Subtle Background Effect */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/5 blur-[120px] rounded-full opacity-40 pointer-events-none -z-10" />
+
+        <div className="space-y-10 animate-fade-in-up">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6 pb-8 border-b border-border/40">
+            <div className="text-center md:text-left">
+              <h1 className="text-3xl font-bold text-foreground tracking-tight">审查结果概览</h1>
+              <div className="flex items-center justify-center md:justify-start gap-3 mt-2 text-muted-foreground">
+                <span className="inline-block w-2 h-2 rounded-full bg-green-500"></span>
+                <p className="text-sm font-medium">生成时间：{results.timestamp}</p>
+              </div>
             </div>
+
             <Button
               onClick={async () => {
                 try {
@@ -249,16 +255,24 @@ export default function ResultsPageClient() {
                   alert(error instanceof Error ? error.message : "生成审查报告失败")
                 }
               }}
-              className="gap-2"
+              className="h-11 px-6 shadow-lg shadow-primary/10 hover:shadow-primary/20 transition-all hover:-translate-y-0.5"
             >
-              <Download className="h-4 w-4" />
+              <Download className="mr-2 h-4 w-4" />
               下载审查报告
             </Button>
           </div>
 
           <ResultsOverview results={results} />
 
-          <FileResultsList files={results.files} />
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <h2 className="text-xl font-semibold text-foreground">详细问题列表</h2>
+              <span className="px-2.5 py-0.5 rounded-full bg-secondary text-xs font-medium text-muted-foreground">
+                {results.totalIssues} 个问题
+              </span>
+            </div>
+            <FileResultsList files={results.files} />
+          </div>
         </div>
       </main>
     </div>

@@ -35,28 +35,29 @@ export function Header() {
     <>
       <div className={cn("top-progress-bar", isVisible && "active")} />
 
-      <header className="border-b border-border bg-white">
+      <header className="sticky top-0 z-50 w-full border-b border-border/40 glass transition-all duration-300">
         <div className="container mx-auto max-w-[1200px] flex h-16 items-center justify-between px-6">
           <Link
             href="/"
-            className="group flex items-center gap-2 rounded-full border border-transparent px-3 py-1.5 text-lg font-medium text-foreground transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/5 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            className="group flex items-center gap-2 rounded-full border border-transparent px-3 py-1.5 text-lg font-semibold tracking-tight text-foreground transition-all duration-200 ease-out hover:bg-secondary/50"
             aria-label="返回首页"
           >
-            <ShieldCheck className="h-6 w-6 text-primary transition-transform duration-200 group-hover:scale-110" />
-            <span>文书校验</span>
+            <div className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <span className="bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">文书校验</span>
           </Link>
 
-          <nav className="flex items-center gap-6">
+          <nav className="flex items-center gap-1">
             {items.map((item) => (
               <Button
                 key={item.href}
                 variant="ghost"
                 className={cn(
-                  "text-sm font-medium px-3",
-                  navInteractiveClasses,
+                  "relative h-9 px-4 text-sm font-medium transition-all duration-200",
                   item.isActive
-                    ? "text-primary bg-primary/10"
-                    : "text-muted-foreground hover:text-primary",
+                    ? "text-primary bg-primary/10 hover:bg-primary/15"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/80",
                 )}
                 aria-current={item.isActive ? "page" : undefined}
                 onClick={() => {
@@ -66,6 +67,9 @@ export function Header() {
                 }}
               >
                 {item.label}
+                {item.isActive && (
+                  <span className="absolute inset-x-0 -bottom-[13px] h-[2px] bg-primary rounded-t-full" />
+                )}
               </Button>
             ))}
           </nav>

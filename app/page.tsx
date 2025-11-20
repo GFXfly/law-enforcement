@@ -3,24 +3,38 @@ import { FileUploadSection } from "@/components/file-upload-section"
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Header />
-      <main className="container mx-auto max-w-[1200px] px-6 py-20">
-        <div className="mx-auto max-w-4xl text-center">
-          <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-foreground text-balance">
-            执法文书校验系统
-          </h1>
-          <p className="mt-6 text-lg text-muted-foreground leading-relaxed">智能检查，精准定位</p>
 
-          <div className="mt-16">
+      <main className="flex-1 container mx-auto max-w-[1200px] px-6 flex flex-col justify-center relative">
+        {/* Background Glow Effect */}
+        <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-primary/5 blur-[100px] rounded-full opacity-50" />
+          <div className="absolute bottom-0 right-0 w-[800px] h-[600px] bg-blue-100/20 blur-[120px] rounded-full opacity-30" />
+        </div>
+
+        <div className="mx-auto max-w-4xl text-center animate-fade-in-up">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-foreground text-balance mb-12 drop-shadow-sm">
+            执法文书<span className="text-gradient">智能校验</span>系统
+          </h1>
+
+          <div className="relative z-10">
             <FileUploadSection />
           </div>
         </div>
       </main>
 
-      <footer className="border-t border-border/50 bg-muted/20 py-8">
+      <footer className="border-t border-border/40 bg-white/50 backdrop-blur-sm py-6 mt-auto">
         <div className="container mx-auto max-w-[1200px] px-6 text-center text-sm font-light text-muted-foreground">
-          © 2025 执法文书校验系统 · 语义 + 规则双引擎 | 浙ICP备2025160577号-2
+          © 2025 执法文书校验系统 · 语义 + 规则双引擎 |{" "}
+          <a
+            href="https://beian.miit.gov.cn/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-primary transition-colors underline decoration-transparent hover:decoration-primary/30 underline-offset-4"
+          >
+            浙ICP备2025160577号
+          </a>
         </div>
       </footer>
     </div>

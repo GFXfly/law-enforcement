@@ -9,4 +9,4 @@ export {
   SIMPLIFIED_REVIEW_RULES,
   executeSimplifiedReview,
   formatReviewResults
-} from './administrative-penalty-rules'
+} from './rules'
