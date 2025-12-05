@@ -92,7 +92,7 @@ sleep 5
 
 # 步骤10: 测试应用
 echo -e "\n${YELLOW}步骤10: 测试应用...${NC}"
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 || echo "000")
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3002 || echo "000")
 
 if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "304" ]; then
     echo -e "${GREEN}✓ 应用响应正常 (HTTP $HTTP_CODE)${NC}"
@@ -135,7 +135,7 @@ echo "部署修复完成！"
 echo "=========================================${NC}"
 echo ""
 echo "应用信息:"
-echo "  - 内部端口: 3000"
+echo "  - 内部端口: 3002"
 echo "  - 外部访问: http://wenshu.site"
 echo ""
 echo "常用命令:"
@@ -145,7 +145,7 @@ echo "  pm2 restart $APP_NAME   - 重启应用"
 echo "  pm2 monit               - 实时监控"
 echo ""
 echo "测试访问:"
-echo "  curl http://localhost:3000"
+echo "  curl http://localhost:3002"
 echo "  curl http://wenshu.site"
 echo ""
 echo -e "${YELLOW}查看实时日志:${NC}"
