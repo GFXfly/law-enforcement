@@ -16,7 +16,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # 项目目录
-PROJECT_DIR="/www/wwwroot/law-enforcement"
+PROJECT_DIR="/var/www/law-enforcement"
 APP_NAME="law-enforcement"
 
 # 检查 Node.js

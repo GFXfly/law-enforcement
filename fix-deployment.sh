@@ -14,7 +14,7 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-PROJECT_DIR="/www/wwwroot/law-enforcement"
+PROJECT_DIR="/var/www/law-enforcement"
 APP_NAME="law-enforcement"
 
 # 步骤1: 停止所有相关进程

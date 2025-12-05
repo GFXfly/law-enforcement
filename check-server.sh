@@ -72,7 +72,7 @@ fi
 
 # 检查项目目录
 echo -e "\n${YELLOW}7. 项目目录检查:${NC}"
-PROJECT_DIR="/www/wwwroot/law-enforcement"
+PROJECT_DIR="/var/www/law-enforcement"
 if [ -d "$PROJECT_DIR" ]; then
     echo -e "${GREEN}✓ 项目目录存在: $PROJECT_DIR${NC}"
     cd $PROJECT_DIR
